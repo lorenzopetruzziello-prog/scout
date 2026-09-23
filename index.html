@@ -527,8 +527,8 @@ const pts=n=>n+' '+plural(n,'punto','punti');
 const norm=s=>String(s||'').trim().toLowerCase().replace(/\s+/g,' ');
 const numSort=(a,b)=>(parseInt(a,10)-parseInt(b,10))||String(a).localeCompare(String(b));
 const slug=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,30);
-function shotName(z,d){ if(isC(d)) return (z==='P'?'pipe ':z==='1'?'seconda linea da 1 ':'da '+z+' ')+DN[d]; if(z==='P') return d==='T'?'pallonetto in pipe':'pipe in '+DN[d]; return d==='T'?'pallonetto da '+z:'da '+z+' in '+DN[d]; }
-function shortShot(z,d){ if(isC(d)) return (z==='P'?'Pipe':z==='1'?'Dietro':z)+' → '+d; const w={D:'diag.',L:'para',T:'pallon.'}[d]; return (z==='P'?'Pipe':z)+' '+w; }
+function shotName(z,d){ if(isC(d)){ if(z==='P') return 'pipe '+DN[d]; if(z==='1') return "l'opposto da 1 "+DN[d]; return 'da 3 diagonale verso zona '+d; } if(z==='P') return d==='T'?'pallonetto in pipe':'pipe in '+DN[d]; return d==='T'?'pallonetto da '+z:'da '+z+' in '+DN[d]; }
+function shortShot(z,d){ if(isC(d)){ if(z==='P') return 'Pipe → '+d; if(z==='1') return 'Opposto → '+d; return z+' → '+d; } const w={D:'diag.',L:'para',T:'pallon.'}[d]; return (z==='P'?'Pipe':z)+' '+w; }
 function joinIt(a){ return a.length<2?a.join(''):a.slice(0,-1).join(', ')+' e '+a[a.length-1]; }
 function newId(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,5).padEnd(3,'0'); }
 function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -937,17 +937,17 @@ $('#starterBtn').addEventListener('click',()=>openRoster(false));
 /* ---------- scout: campo ---------- */
 function shotBtn(z,d){
   if(isBack(z)){
-    const ic={P:{'1':'D2','6':'L','5':'D4'},'1':{'1':'D2','6':'UL','5':'L'}}[z][d], nm=z==='P'?'Pipe':'Seconda linea da 1';
+    const ic={P:{'1':'D2','6':'L','5':'D4'},'1':{'1':'D2','6':'UL','5':'L'}}[z][d], nm=z==='P'?'Pipe':"L'opposto da zona 1";
     return `<button class="shot bk" data-z="${z}" data-d="${d}" aria-pressed="false" aria-label="${nm}, verso zona ${d}"><svg class="si" viewBox="0 0 16 16" aria-hidden="true"><path d="${SHOT_IC[ic]}"/></svg><span class="lab"><span class="lg">${d}</span><span class="sh">${d}</span><span class="xs">${d}</span></span><span class="tally" aria-hidden="true"></span></button>`;
   }
   const ic=d==='1'?'D2':d==='5'?'D4':d==='D'?(z==='4'?'D4':z==='2'?'D2':'DC'):d;
-  const lg={D:'Diagonale',L:'Parallela',T:'Pallonetto','1':'Verso 1','5':'Verso 5'}[d], sh={D:'Diag.',L:'Para',T:'Pallon.','1':'Verso 1','5':'Verso 5'}[d], xs={D:'Diag',L:'Para',T:'Pall','1':'V1','5':'V5'}[d];
+  const lg={D:'Diagonale',L:'Parallela',T:'Pallonetto','1':'Diagonale 1',5:'Diagonale 5','5':'Diagonale 5'}[d], sh={D:'Diag.',L:'Para',T:'Pallon.','1':'Diag. 1','5':'Diag. 5'}[d], xs={D:'Diag',L:'Para',T:'Pall','1':'D1','5':'D5'}[d];
   return `<button class="shot" data-z="${z}" data-d="${d}" aria-pressed="false" aria-label="${z==='P'?'Pipe':'Da '+z}, ${lg.toLowerCase()}"><svg class="si" viewBox="0 0 16 16" aria-hidden="true"><path d="${SHOT_IC[ic]}"/></svg><span class="lab"><span class="lg">${lg}</span><span class="sh">${sh}</span><span class="xs">${xs}</span></span><span class="tally" aria-hidden="true"></span></button>`;
 }
 function buildCourt(){
   const zone=(z,cap)=>`<div class="zone"><div class="zhead"><b>${z}</b><span>${cap}</span></div>${ZD[z].map(d=>shotBtn(z,d)).join('')}</div>`;
   const grp=(z,t,c)=>`<div class="bgrp"><div class="zhead"><b>${t}</b><span>${c}</span></div><div class="brow">${ZD[z].map(d=>shotBtn(z,d)).join('')}</div></div>`;
-  $('#court').innerHTML=`<div class="net" aria-hidden="true"><i class="ant l"></i><i class="ant r"></i></div><div class="front">${zone('4','banda')}${zone('3','centro')}${zone('2','opposto')}</div><div class="back"><span class="l3" aria-hidden="true">seconda linea · verso zona</span>${grp('P','Pipe','da 6')}${grp('1','Da 1','dietro')}</div>`;
+  $('#court').innerHTML=`<div class="net" aria-hidden="true"><i class="ant l"></i><i class="ant r"></i></div><div class="front">${zone('4','banda')}${zone('3','centro')}${zone('2','opposto')}</div><div class="back"><span class="l3" aria-hidden="true">seconda linea · verso zona</span>${grp('P','Pipe','da 6')}${grp('1','Opposto','da 1')}</div>`;
 }
 function renderCourtState(){
   const m=cur(); let tal=null;
