@@ -77,7 +77,10 @@ main{position:relative;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-ov
 .view{width:100%;max-width:1360px;margin:0 auto;padding:14px 16px 40px}
 
 /* ---------- barra (telefono) / colonna (PC) ---------- */
-.appbar{position:relative;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:env(safe-area-inset-top,0px) 12px 0}
+.appbar{position:relative;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:calc(env(safe-area-inset-top,0px) + 8px) 12px 0}
+/* app installata su telefono: la barra di stato dell'iPhone si appoggia sopra la pagina, quindi lascio sempre il suo spazio */
+@media (display-mode:standalone) and (max-width:1023px){.appbar{padding-top:calc(max(env(safe-area-inset-top,0px),24px) + 6px)}}
+@media (display-mode:standalone) and (max-width:1023px) and (min-height:800px){.appbar{padding-top:calc(max(env(safe-area-inset-top,0px),50px) + 6px)}}
 .brand,.rail-foot{display:none}
 .bar-row{display:flex;align-items:center;gap:8px;min-height:52px}
 .matchbtn{flex:1;min-width:0;display:flex;align-items:center;gap:8px;border:0;background:none;padding:6px 6px 6px 2px;border-radius:var(--r-sm);text-align:left}
@@ -299,6 +302,7 @@ main:has(.scout:not([hidden])){padding-bottom:0}
   .sideswitch button{height:40px}
 }
 @media (max-height:680px){
+  .appbar{padding-top:calc(env(safe-area-inset-top,0px) + 3px)}
   .sc-who .blk-h,.sc-court .blk-h{display:none}
   .shot{min-height:34px}.out{min-height:50px}.out .oi{display:none}.status{min-height:40px}
   .jersey{height:44px}.shirt{width:46px;height:41px}.jersey .jn{top:12px;font-size:18px}.jersey .nm{display:none}.jerseys.named .jersey{height:44px}
@@ -306,7 +310,7 @@ main:has(.scout:not([hidden])){padding-bottom:0}
 }
 
 @media (max-height:600px) and (orientation:portrait){
-  .appbar .bar-row{min-height:44px}.matchbtn .mb-k{display:none}.tabs button{padding:8px 4px 9px}
+  .appbar{padding-top:env(safe-area-inset-top,0px)}.appbar .bar-row{min-height:44px}.matchbtn .mb-k{display:none}.tabs button{padding:8px 4px 9px}
   .view.scout{padding-top:8px}.scout{gap:7px}
   .sideswitch{padding:3px}.sideswitch button{height:32px}
   .shot{min-height:31px}.zone{gap:5px;padding:4px 3px 6px}.zh b{font-size:17px}.back{padding-top:9px}
