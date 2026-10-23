@@ -2141,7 +2141,7 @@ function exportCsv(){
   }
   // fuori da Claude: scarico il file direttamente, se il browser lo permette
   try{
-    if(isIOS()&&isStandalone()) throw new Error('ios');   // nell'app installata su iPhone il download apre una pagina senza ritorno
+    if(!GH||(isIOS()&&isStandalone())) throw new Error('nodl');   // fuori dal sito o nell'app installata su iPhone il download non funziona bene: meglio la tabella da copiare
     const blob=new Blob([toCSV(rows)],{type:'text/csv;charset=utf-8'}), url=URL.createObjectURL(blob), a=document.createElement('a');
     a.href=url; a.download=name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),4000);
