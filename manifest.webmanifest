@@ -1,14 +1,14 @@
 {
   "name": "Scout pallavolo",
   "short_name": "Scout",
-  "description": "Scout dell'attacco nella pallavolo: le avversarie, la tua squadra e il confronto.",
+  "description": "Scout dell'attacco nella pallavolo: le avversarie, la tua squadra e cosa dire al timeout.",
   "lang": "it",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#EEF2F7",
-  "theme_color": "#FFFFFF",
+  "background_color": "#0B2E5E",
+  "theme_color": "#123E78",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
