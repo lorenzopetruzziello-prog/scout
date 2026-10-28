@@ -91,7 +91,7 @@ function todayISO(){ const d=new Date(); return d.getFullYear()+'-'+String(d.get
 function fmtDate(iso){ const p=String(iso||'').split('-'); if(p.length!==3) return ''; return p[2]+'/'+p[1]+(+p[0]!==new Date().getFullYear()?'/'+p[0].slice(2):''); }
 function fmtDateFull(iso){ const p=String(iso||'').split('-'); return p.length===3?p[2]+'/'+p[1]+'/'+p[0]:''; }
 function normNum(n){ n=String(n==null?'':n).trim(); if(n==='?') return '?'; if(!/^\d{1,3}$/.test(n)||parseInt(n,10)>100) return null; return String(parseInt(n,10)); }
-function buzz(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms||12); }catch(e){} }
+function buzz(ms){ try{ if(typeof prefs!=='undefined'&&prefs.haptics===false) return; if(navigator.vibrate) navigator.vibrate(ms||12); }catch(e){} }
 const NB=' ';
 
 /* ---------- dati ---------- */
@@ -793,7 +793,7 @@ function exportCsv(){
 function doInstall(){
   if(!installEvt){ openInstallHow(); return; }
   const e=installEvt; installEvt=null;
-  try{ e.prompt(); Promise.resolve(e.userChoice).finally(()=>{ if(view==='data') renderData(); }); }catch(err){ openInstallHow(); }
+  try{ e.prompt(); Promise.resolve(e.userChoice).finally(()=>{ if(view==='settings') renderSettings(); }); }catch(err){ openInstallHow(); }
 }
 function openInstallHow(){
   const steps=isIOS()
@@ -844,6 +844,10 @@ const resetSel=()=>{ sel={n:null,z:null,d:null,o:null}; };
 const side=()=>db.side;
 let filter='match';
 let tipsUI={scope:null,tab:'brief'};
+const PKEY='scout-prefs';
+let prefs=(()=>{ const d={haptics:true,wipe:true,sideHint:true,names:true,big:false}; try{ return Object.assign(d,JSON.parse(localStorage.getItem(PKEY)||'{}')); }catch(e){ return d; } })();
+function savePrefs(){ try{ localStorage.setItem(PKEY,JSON.stringify(prefs)); }catch(e){} applyPrefs(); if(view==='scout') renderScout(); }
+function applyPrefs(){ $('#app').classList.toggle('big',!!prefs.big); }
 function resetTipsUI(){ tipsUI={scope:null,tab:'brief'}; filter='match'; }
 const closeBtn=()=>`<button class="iconbtn" data-close aria-label="Chiudi">${IC.x}</button>`;
 const setsWithData=(m,min)=>[...new Set(m.ev.map(e=>e.s))].sort((a,b)=>a-b).filter(s=>m.ev.filter(e=>e.s===s).length>=(min||4));
@@ -854,7 +858,7 @@ function setGround(g,origin){
   const app=$('#app'); if(app.dataset.ground===g) return;
   const tc=$('#themeColor'); if(tc) tc.setAttribute('content',GROUND_COL[g]);
   const gr=$('.ground');
-  if(origin&&!reduced&&document.body.animate){
+  if(origin&&prefs.wipe&&!reduced&&document.body.animate){
     try{
       const x=origin.x, y=origin.y, r=Math.hypot(Math.max(x,innerWidth-x),Math.max(y,innerHeight-y))+20;
       const w=document.createElement('div'); w.className='wipe';
@@ -876,9 +880,7 @@ function renderHeader(){
   const m=cur(), o=m.opp.trim();
   $('#matchName').textContent=o||'Nuova partita';
   $('#mbKick').textContent=o?fmtDay(m.date)+', contro':'Partita del '+fmtDate(m.date);
-  const has=new Set(m.ev.map(e=>e.s));
-  $$('#sets button').forEach(b=>{ const s=+b.dataset.set; b.setAttribute('aria-pressed',String(s===m.set)); b.classList.toggle('has',has.has(s)&&s!==m.set); });
-  moveSetPill();
+  renderSetControl();
   document.title=o?'Scout vs '+o:'Scout';
   $('#swL').textContent=o||'Attaccano loro';
   $('#swN').textContent=db.team.name.trim()||'Attacchiamo noi';
@@ -894,7 +896,6 @@ function fmtDay(iso){
   const wd=['Domenica','Lunedì','Martedì','Mercoledì','Giovedì','Venerdì','Sabato'][d.getDay()];
   return diff>0&&diff<7?wd+' '+fmtDate(iso):fmtDate(iso);
 }
-function moveSetPill(){ const b=$('#sets button[aria-pressed="true"]'); if(b&&b.offsetWidth) $('#sets').style.setProperty('--sx',(b.offsetLeft-4)+'px'); }
 function moveInd(){
   const t=$(`.tabs button[data-v="${view}"]`), n=$('.tabs'); if(!t||!t.offsetWidth) return;
   n.style.setProperty('--tw',t.offsetWidth+'px'); n.style.setProperty('--tx',t.offsetLeft+'px');
@@ -909,7 +910,7 @@ window.addEventListener('resize',()=>{ moveInd(); moveSetPill(); });
 try{ if(document.fonts) document.fonts.ready.then(()=>{ moveInd(); moveSetPill(); }); }catch(e){}
 
 function show(v,opts){
-  if(!['scout','tips','team','data'].includes(v)) v='scout';
+  if(!['scout','tips','team','settings'].includes(v)) v='scout';
   const changed=v!==view;
   view=v;
   $$('.tabs button').forEach(b=>{ const on=b.dataset.v===v; b.setAttribute('aria-selected',String(on)); b.tabIndex=on?0:-1; });
@@ -925,11 +926,12 @@ function renderView(){
   if(view==='scout') renderScout();
   else if(view==='tips') renderTips();
   else if(view==='team') renderTeam();
-  else renderData();
+  else renderSettings();
 }
 function renderAll(){ renderHeader(); renderView(); }
 
-$('#sets').addEventListener('click',e=>{ const b=e.target.closest('button[data-set]'); if(!b) return; const m=cur(), s=+b.dataset.set; if(m.set===s) return; m.set=s; save(); buzz(); renderHeader(); if(view==='scout') renderDock(); else if(view==='tips'){ tipsUI.scope=null; renderTips(); } });
+$('#sets').addEventListener('click',e=>{ const b=e.target.closest('button[data-set]'); if(b) changeSet(+b.dataset.set,true); });
+$('#setBtn').addEventListener('click',openSetSheet);
 $('#matchBtn').addEventListener('click',()=>openMatches());
 $('.tabs').addEventListener('click',e=>{ const b=e.target.closest('button[data-v]'); if(!b) return; const r=b.getBoundingClientRect(); show(b.dataset.v,{origin:{x:r.left+r.width/2,y:r.top+r.height/2}}); });
 $('.tabs').addEventListener('keydown',e=>{
@@ -970,7 +972,7 @@ function jerseyNums(){
 }
 function jerseyBtn(n,c,k,s){
   const hot=c>=3&&k/c>=.5;
-  const p=s==='N'&&n!=='?'?plOf(n):null, nm=p&&p.nm?p.nm:'';
+  const p=s==='N'&&n!=='?'?plOf(n):null, nm=p&&p.nm&&prefs.names?p.nm:'';
   const label=(n==='?'?'Numero non visto':'Numero '+n+(nm?', '+nm:''))+(c?', '+att(c)+(k?', '+pts(k):''):'');
   return `<button class="jersey${n==='?'?' unknown':''}" data-n="${esc(n)}" aria-pressed="${sel.n===n}" aria-label="${esc(label)}"><span class="jn" aria-hidden="true">${esc(n)}</span>${nm?`<span class="nm" aria-hidden="true">${esc(nm)}</span>`:''}${c?`<span class="cnt${hot?' hot':''}" aria-hidden="true">${c}</span>`:''}</button>`;
 }
@@ -979,7 +981,7 @@ function renderJerseys(bumpN){
   m.ev.forEach(e=>{ if(e.p!==s) return; cnt[e.n]=(cnt[e.n]||0)+1; if(e.o==='K') kil[e.n]=(kil[e.n]||0)+1; });
   const list=jerseyNums();
   const box=$('#jerseys');
-  box.classList.toggle('named',s==='N'&&livePl().some(p=>p.nm));
+  box.classList.toggle('named',s==='N'&&prefs.names&&livePl().some(p=>p.nm));
   box.innerHTML=list.map(n=>jerseyBtn(n,cnt[n]||0,kil[n]||0,s)).join('')+jerseyBtn('?',cnt['?']||0,kil['?']||0,s)+`<button class="jersey unknown" data-roster aria-label="${s==='N'?'Modifica la squadra':'Modifica la rosa avversaria'}"><svg class="i" viewBox="0 0 16 16" aria-hidden="true" style="width:22px;height:22px"><path d="M8 3v10M3 8h10"/></svg></button>`;
   const st=$('#starter');
   st.hidden=list.length>0;
@@ -1003,7 +1005,7 @@ $('#starterBtn').addEventListener('click',openRosterForSide);
 function shotBtn(z,d){
   if(isBack(z)){
     const ic={P:{'1':'D2','6':'L','5':'D4'},'1':{'1':'D2','6':'UL','5':'L'}}[z][d], nm=z==='P'?'Pipe':'Opposto da zona 1';
-    return `<button class="shot bk" data-z="${z}" data-d="${d}" aria-pressed="false" aria-label="${nm}, verso zona ${d}"><span class="lab">${d}</span><span class="tally" aria-hidden="true"></span></button>`;
+    return `<button class="shot bk" data-z="${z}" data-d="${d}" aria-pressed="false" aria-label="${nm}, verso zona ${d}"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="${SHOT_IC[ic]}"/></svg><span class="lab">${d}</span><span class="tally" aria-hidden="true"></span></button>`;
   }
   const ic=d==='1'?'D2':d==='5'?'D4':d==='D'?(z==='4'?'D4':z==='2'?'D2':'DC'):d;
   const L1={D:'Diagonale',L:'Parallela',T:'Pallonetto','1':'Verso 1','5':'Verso 5'}[d], L2={D:'Diag.',L:'Para.',T:'Pallon.','1':'Zona 1','5':'Zona 5'}[d];
@@ -1011,8 +1013,7 @@ function shotBtn(z,d){
 }
 function buildCourt(){
   const front=[0,1,2].map(r=>['4','3','2'].map(z=>shotBtn(z,ZD[z][r])).join('')).join('');
-  $('#court').innerHTML=`<div class="net" aria-hidden="true"><i></i><i></i></div>`
-    +`<p class="zh f"><b>4</b><span>banda</span></p><p class="zh f"><b>3</b><span>centro</span></p><p class="zh f"><b>2</b><span>opposto</span></p>`
+  $('#court').innerHTML=`<p class="zh f"><b>4</b><span>banda</span></p><p class="zh f"><b>3</b><span>centro</span></p><p class="zh f"><b>2</b><span>opposto</span></p>`
     +front
     +`<div class="bk-line" aria-hidden="true"></div><p class="zh bh"><b>Pipe</b><span>verso zona</span></p><p class="zh bh"><b>Da 1</b><span>verso zona</span></p>`
     +ZD.P.map(d=>shotBtn('P',d)).join('')+ZD['1'].map(d=>shotBtn('1',d)).join('');
@@ -1068,7 +1069,7 @@ function tryCommit(){
   // dopo una difesa la palla passa di là: suggerisco il cambio di lato, senza farlo da solo
   $$('#sideSw button').forEach(b=>b.classList.remove('hint'));
   clearTimeout(hintT);
-  if(e.o==='D'){ const ob2=$(`#sideSw button[data-side="${s==='L'?'N':'L'}"]`); if(ob2){ void ob2.offsetWidth; ob2.classList.add('hint'); hintT=setTimeout(()=>ob2.classList.remove('hint'),3600); } }
+  if(e.o==='D'&&prefs.sideHint){ const ob2=$(`#sideSw button[data-side="${s==='L'?'N':'L'}"]`); if(ob2){ void ob2.offsetWidth; ob2.classList.add('hint'); hintT=setTimeout(()=>ob2.classList.remove('hint'),3600); } }
 }
 function flyBall(btn,e){
   if(reduced||!btn||!btn.animate) return;
@@ -1200,7 +1201,8 @@ document.addEventListener('keydown',e=>{
   if(/^\d$/.test(k)){ e.preventDefault(); typedNumber(k); return; }
   if(k==='?'){ e.preventDefault(); sel.n=null; pickNum('?'); return; }
   if(KEYOUT[lk]){ e.preventDefault(); pickOut(KEYOUT[lk]); return; }
-  if(lk==='l'||lk==='n'){ e.preventDefault(); setSide(lk==='l'?'L':'N'); }
+  if(lk==='l'||lk==='n'){ e.preventDefault(); setSide(lk==='l'?'L':'N'); return; }
+  if(k==='+'||k==='='){ e.preventDefault(); const m=cur(); if(m.set<5) changeSet(m.set+1,true); }
 });
 
 /* =========================================================
@@ -1244,96 +1246,178 @@ function autoScope(){
 }
 function curScope(){ const opts=scopeOpts().map(o=>o.k); let s=tipsUI.scope||autoScope(); if(!opts.includes(s)) s='match'; return s; }
 
-/* il motore: poche cose, quelle che contano, in ordine */
+/* =========================================================
+   Il motore delle indicazioni
+   Non elenca numeri: li legge. Ogni indicazione è un comando
+   da dire in campo, con il perché e quanto è affidabile.
+   ========================================================= */
+const conf=n=>n>=8?{k:'hi',l:'Dato solido'}:n>=5?{k:'mid',l:'Probabile'}:{k:'lo',l:'Da confermare'};
+const nmN=n=>{ const p=plOf(n); return p&&p.nm?p.nm:'la #'+n; };
+const NmN=n=>{ const p=plOf(n); return p&&p.nm?p.nm:'La #'+n; };
+function cmdThreat(z,d,n){
+  const t='#'+n;
+  if(d==='T') return `Corta dietro il muro sulla ${t}`;
+  if(z==='P') return `Fermate la pipe della ${t}`;
+  if(z==='1') return `Aspettate la ${t} da zona 1`;
+  if(z==='3') return `Chiudete il primo tempo della ${t}`;
+  return d==='D'?`Togliete la diagonale alla ${t}`:`Togliete la parallela alla ${t}`;
+}
+function cmdShot(z,d){
+  if(d==='T') return 'Una giocatrice corta dietro il muro';
+  if(z==='P') return 'Fermate la loro pipe';
+  if(z==='1') return 'Coprite il loro attacco da 1';
+  if(z==='3') return 'Chiudete il loro primo tempo';
+  return `Coprite la ${DN[d]} da ${z}`;
+}
+const zoneName=z=>({'4':'la loro banda','3':'il centro','2':'il loro opposto','P':'la pipe','1':'l’attacco da 1'}[z]);
+const kRate=a=>a.length?a.filter(e=>e.o==='K').length/a.length:0;
+
+/* stessa avversaria in altre partite: il colpo che fa male si ripete? */
+function pastConfirm(n,z,d){
+  const m=cur(), others=sameOpp(m).filter(x=>x.ev.some(e=>e.p==='L'&&e.n===n));
+  const hits=others.filter(x=>{ const A=aggregate(x.ev.filter(e=>e.p==='L'&&e.n===n)); const p=A.players[0]; const k=p&&topKill(p); return k&&k.z===z&&k.d===d; });
+  if(!hits.length) return '';
+  const last=hits.sort((a,b)=>b.created-a.created)[0];
+  return hits.length>1?`Lo fa da ${hits.length+1} partite.`:`Lo faceva già il ${fmtDate(last.date)}.`;
+}
+
 function buildBrief(scope){
   const m=cur(), evs=fEvents(scope), L=sideEv(evs,'L'), N=sideEv(evs,'N');
-  const B={scope,L,N,tL:totals(L),tN:totals(N),def:[],att:[],good:[],cmp:''};
+  const B={scope,L,N,tL:totals(L),tN:totals(N),items:[],good:[],keys:[]};
   // confronto: il set prima, oppure (tie-break) gli ultimi due set contro i precedenti
-  let recentL=null, oldL=null, recentN=null, oldN=null, plab='';
+  let rL=null, oL=null, rN=null, oN=null, plab='';
   if(scope.indexOf('set')===0){
     const s=+scope.slice(3), prev=setsWithData(m).filter(x=>x<s).pop();
-    if(prev){ const pe=m.ev.filter(e=>e.s===prev); recentL=L; oldL=sideEv(pe,'L'); recentN=N; oldN=sideEv(pe,'N'); plab='nel set '+prev; }
+    if(prev){ const pe=m.ev.filter(e=>e.s===prev); rL=L; oL=sideEv(pe,'L'); rN=N; oN=sideEv(pe,'N'); plab='nel set '+prev; }
   }else if(scope==='tb'){
-    const sets=[...new Set(L.map(e=>e.s))].sort((a,b)=>a-b);
-    if(sets.length>=3){ const rs=sets.slice(-2); recentL=L.filter(e=>rs.includes(e.s)); oldL=L.filter(e=>!rs.includes(e.s)); recentN=N.filter(e=>rs.includes(e.s)); oldN=N.filter(e=>!rs.includes(e.s)); plab='negli ultimi due set'; }
+    const sets=[...new Set(evs.map(e=>e.s))].sort((a,b)=>a-b);
+    if(sets.length>=3){ const rs=sets.slice(-2); rL=L.filter(e=>rs.includes(e.s)); oL=L.filter(e=>!rs.includes(e.s)); rN=N.filter(e=>rs.includes(e.s)); oN=N.filter(e=>!rs.includes(e.s)); plab='prima degli ultimi due set'; }
   }
-  const rate=a=>a.length?totals(a).K/a.length:0;
-  const trendTxt=(r,o,who_)=>{ if(!r||!o||r.length<6||o.length<6) return ''; const d=rate(r)-rate(o); if(Math.abs(d)<.08) return ''; return scope==='tb'?`ultimi due set ${pct(rate(r))}, prima ${pct(rate(o))}`:`${plab} erano al ${pct(rate(o))}`; };
-  B.trL=trendTxt(recentL,oldL); B.trN=trendTxt(recentN,oldN);
-  B.dirL=recentL&&oldL&&recentL.length>=6&&oldL.length>=6?Math.sign(Math.round((rate(recentL)-rate(oldL))*12)):0;
-  B.dirN=recentN&&oldN&&recentN.length>=6&&oldN.length>=6?Math.sign(Math.round((rate(recentN)-rate(oldN))*12)):0;
+  const dir=(r,o)=>r&&o&&r.length>=6&&o.length>=6?kRate(r)-kRate(o):0;
+  B.dL=dir(rL,oL); B.dN=dir(rN,oN); B.oL=oL; B.oN=oN; B.plab=plab;
 
-  /* --- difesa: loro in attacco --- */
+  /* ---------------- difesa: loro in attacco ---------------- */
   if(L.length>=4){
-    const A=aggregate(L), Ao=oldL&&oldL.length?aggregate(oldL):null, Ar=recentL&&recentL.length?aggregate(recentL):null;
+    const A=aggregate(L), Ao=oL&&oL.length?aggregate(oL):null, Ar=rL&&rL.length?aggregate(rL):null, T=L.length, tot=B.tL;
     const trend=n=>{ if(!Ao||!Ar) return 0; const r=Ar.players.find(p=>p.n===n), o=Ao.players.find(p=>p.n===n); return (r&&o&&r.t>=3&&o.t>=3)?r.kp-o.kp:0; };
     const covered=new Set(), used=new Set();
     A.players.filter(p=>p.n!=='?'&&p.t>=3&&p.K>=2).forEach(p=>{
       const k=topKill(p); if(!k) return;
       const tr=trend(p.n), b=blockTip(k.z,k.d), tips=tipCount(p), extra=[];
       covered.add(k.z+k.d); used.add(p.n);
-      if(Ao&&scope.indexOf('set')===0){ const q=Ao.players.find(x=>x.n===p.n), a=topShot(p), bb=q&&q.t>=3?topShot(q):null; if(a&&bb&&(a.z+a.d)!==(bb.z+bb.d)&&a.t/p.t>=.4&&bb.t/q.t>=.4) extra.push(`Ha cambiato: ${plab} andava ${shotName(bb.z,bb.d)}.`); }
-      if(tips>=2&&tips/p.t>=.25&&k.d!=='T') extra.push(`Usa anche il pallonetto: ${tips} su ${p.t}.`);
-      if(tr>=.2) extra.push(scope==='tb'?'Negli ultimi due set segna più di prima.':'Sta segnando più di prima.');
-      B.def.push({kind:'threat',tag:'#'+p.n,head:'Fa punto '+punchy(k.z,k.d),stat:`${pts(p.K)} su ${att(p.t)}, ${pct(p.kp)} a segno`,
+      if(Ao&&scope.indexOf('set')===0){ const q=Ao.players.find(x=>x.n===p.n), a=topShot(p), bb=q&&q.t>=3?topShot(q):null; if(a&&bb&&(a.z+a.d)!==(bb.z+bb.d)&&a.t/p.t>=.4&&bb.t/q.t>=.4) extra.push(`Ha cambiato colpo: ${plab} andava ${shotName(bb.z,bb.d)}.`); }
+      if(tips>=2&&tips/p.t>=.25&&k.d!=='T') extra.push(`Occhio anche al pallonetto: ${tips} su ${p.t}.`);
+      if(tr>=.2) extra.push('Sta segnando più di prima.');
+      const pc=pastConfirm(p.n,k.z,k.d); if(pc) extra.push(pc);
+      B.items.push({side:'def',kind:'threat',tag:'#'+p.n,head:cmdThreat(k.z,k.d,p.n),why:`Fa punto ${punchy(k.z,k.d)}: ${k.K} su ${k.t}`+(p.K>k.K?`, ${pts(p.K)} in tutto`:''),n:k.t,
         text:cap(defense(k.z,k.d))+'.'+(b?' Muro: '+b+'.':'')+(extra.length?' '+extra.join(' '):''),
-        board:{att:'L',shots:[{z:k.z,d:k.d}],num:p.n,block:!!b,defend:true},score:p.K*(.6+p.kp)+(tr>=.2?2:0)});
+        board:{att:'L',shots:[{z:k.z,d:k.d}],num:p.n,block:!!b,defend:true},score:p.K*(.6+p.kp)+(tr>=.2?2:0)+(pc?1:0)});
     });
     Object.values(A.team).filter(s=>s.K>=2&&s.K/s.t>=.4&&!covered.has(s.z+s.d)).forEach(s=>{
       const by=A.players.filter(p=>p.sh[s.z+s.d]&&p.sh[s.z+s.d].K).map(p=>who(p.n,'L')), b=blockTip(s.z,s.d);
       covered.add(s.z+s.d);
-      B.def.push({kind:'shot',tag:'Colpo',head:'Ci fanno male '+punchy(s.z,s.d),stat:`${pts(s.K)} su ${s.t}`,text:`Punti di ${joinIt(by)}. ${cap(defense(s.z,s.d))}.`+(b?' Muro: '+b+'.':''),board:{att:'L',shots:[{z:s.z,d:s.d}],block:!!b,defend:true},score:s.K*(.4+s.K/s.t)});
+      B.items.push({side:'def',kind:'shot',tag:'Colpo',head:cmdShot(s.z,s.d),why:`${cap(shotName(s.z,s.d))}: ${pts(s.K)} su ${s.t}`,n:s.t,text:`Punti di ${joinIt(by)}. ${cap(defense(s.z,s.d))}.`+(b?' Muro: '+b+'.':''),board:{att:'L',shots:[{z:s.z,d:s.d}],block:!!b,defend:true},score:s.K*(.4+s.K/s.t)});
     });
     const tipT=Object.values(A.team).filter(s=>s.d==='T'), tK=tipT.reduce((a,s)=>a+s.K,0), tT=tipT.reduce((a,s)=>a+s.t,0);
-    if(tK>=2&&tK/tT>=.35&&!B.def.some(x=>x.board.shots[0].d==='T')){
-      const z=tipT.sort(byUse)[0].z;
-      B.def.push({kind:'tip',tag:'Pallonetti',head:'Una giocatrice corta dietro il muro',stat:`${pts(tK)} su ${tT} pallonetti`,text:'Chi non salta a muro resta corta, pronta a entrare. Non restate piantate in fondo.',board:{att:'L',shots:[{z,d:'T'}],defend:true},score:tK*.9});
+    if(tK>=2&&tK/tT>=.35&&!B.items.some(x=>x.board.shots[0]&&x.board.shots[0].d==='T')){
+      const z=tipT.slice().sort(byUse)[0].z;
+      B.items.push({side:'def',kind:'tip',tag:'Pallonetti',head:'Una giocatrice corta dietro il muro',why:`${pts(tK)} su ${tT} pallonetti`,n:tT,text:'Chi non salta a muro resta corta, pronta a entrare. Non restate piantate in fondo.',board:{att:'L',shots:[{z,d:'T'}],defend:true},score:tK*.9});
     }
-    const H=heat(L), hl=hole(H);
+    const hl=hole(heat(L));
     if(hl){
-      const lit=new Set(B.def.flatMap(x=>x.board.shots.flatMap(s=>landing(s.z,s.d).map(c=>c[0]))));
-      if(!lit.has(hl.c)) B.def.push({kind:'hole',tag:'Zona',head:'Coprite '+cellName(hl.c),stat:`${fmtN(hl.K)} punti su ${fmtN(hl.t)} attacchi`,text:'È il punto del nostro campo dove ci fanno più male.',board:{att:'L',shots:[],hi:[hl.c]},score:hl.K*(.4+hl.K/hl.t)});
+      const lit=new Set(B.items.flatMap(x=>x.board.shots.flatMap(s=>landing(s.z,s.d).map(c=>c[0]))));
+      if(!lit.has(hl.c)) B.items.push({side:'def',kind:'hole',tag:'Zona',head:'Coprite '+cellName(hl.c),why:`Lì cadono ${fmtN(hl.K)} loro punti su ${fmtN(hl.t)} palloni`,n:Math.round(hl.t),text:'È il punto del nostro campo dove ci fanno più male: spostate lì la difesa.',board:{att:'L',shots:[],hi:[hl.c]},score:hl.K*(.4+hl.K/hl.t)});
+    }
+    // da dove parte il loro gioco: il muro si sposta prima che arrivi la palla
+    if(T>=10){
+      const zc={}; L.forEach(e=>{ zc[e.z]=(zc[e.z]||0)+1; });
+      const [zt,zn]=Object.entries(zc).sort((a,b)=>b[1]-a[1])[0], share=zn/T;
+      const thr={'4':.5,'2':.45,'3':.35,'P':.3,'1':.3}[zt];
+      if(share>=thr&&!B.items.some(x=>x.kind==='threat'&&x.board.shots[0].z===zt&&x.score>4)){
+        const zs={}; L.filter(e=>e.z===zt).forEach(e=>{ const k=e.z+e.d; zs[k]=zs[k]||{z:e.z,d:e.d,t:0,K:0}; zs[k].t++; if(e.o==='K') zs[k].K++; });
+        const head=zt==='4'?'Muro spostato sulla loro banda':zt==='2'?'Muro spostato sul loro opposto':zt==='3'?'Centrale pronto sul primo tempo':'Attenti alla seconda linea';
+        B.items.push({side:'def',kind:'dist',tag:'Gioco',head,why:`Il ${pct(share)} dei loro attacchi parte da ${zt==='P'?'pipe':'zona '+zt}`,n:zn,text:`Il loro palleggio cerca ${zoneName(zt)}: anticipate il muro prima che arrivi la palla.`,board:{att:'L',shots:Object.values(zs).map(x=>({z:x.z,d:x.d,w:1.8+3.6*x.t/zn}))},score:share*6});
+      }
     }
     A.players.filter(p=>p.n!=='?'&&p.t>=4&&!used.has(p.n)).forEach(p=>{
       const s=topShot(p); if(!s||s.t<3||s.t/p.t<.5||covered.has(s.z+s.d)) return;
-      B.def.push({kind:'pred',tag:'#'+p.n,head:'Va quasi sempre '+punchy(s.z,s.d),stat:`${s.t} attacchi su ${p.t}`,text:cap(defense(s.z,s.d))+'.',board:{att:'L',shots:[{z:s.z,d:s.d}],num:p.n,defend:true},score:1.2+s.t/p.t});
+      B.items.push({side:'def',kind:'pred',tag:'#'+p.n,head:`La #${p.n} va sempre ${punchy(s.z,s.d)}`,why:`${s.t} attacchi su ${p.t}: è prevedibile`,n:p.t,text:cap(defense(s.z,s.d))+'.',board:{att:'L',shots:[{z:s.z,d:s.d}],num:p.n,defend:true},score:1.2+s.t/p.t});
     });
-    B.def.sort((a,b)=>b.score-a.score);
-    B.def=B.def.slice(0,scope==='tb'?4:3);
     // cosa va bene
-    const tot=B.tL, T=L.length;
-    A.players.filter(p=>p.n!=='?'&&p.t>=4&&p.eff<=0).sort((a,b)=>a.eff-b.eff).slice(0,2).forEach(p=>B.good.push({head:`La teniamo: #${p.n}`,text:`${pts(p.K)} su ${att(p.t)}, efficienza ${spct(p.eff)}. Muro a uno su di lei e aiuti sulle altre.`,score:p.t*(.5-p.eff)}));
-    if(Ar&&Ao) A.players.filter(p=>p.n!=='?'&&trend(p.n)<=-.2).slice(0,1).forEach(p=>{ const r=Ar.players.find(x=>x.n===p.n); B.good.push({head:`In calo: #${p.n}`,text:`${r.K} su ${r.t} ${scope==='tb'?'negli ultimi due set':'in questo set'}, meno di prima.`,score:3}); });
+    A.players.filter(p=>p.n!=='?'&&p.t>=4&&p.eff<=0).sort((a,b)=>a.eff-b.eff).slice(0,2).forEach(p=>B.good.push({head:`La #${p.n} la teniamo`,text:`${pts(p.K)} su ${att(p.t)}. Muro a uno su di lei e aiuti sulle altre.`,score:p.t*(.5-p.eff)}));
+    if(Ar&&Ao) A.players.filter(p=>p.n!=='?'&&trend(p.n)<=-.2).slice(0,1).forEach(p=>{ const r=Ar.players.find(x=>x.n===p.n); B.good.push({head:`La #${p.n} è in calo`,text:`${r.K} su ${r.t} ${scope==='tb'?'negli ultimi due set':'in questo set'}, meno di prima.`,score:3}); });
     if(T>=8&&tot.D/T>=.3) B.good.push({head:`Difendiamo il ${pct(tot.D/T)} dei loro attacchi`,text:`${tot.D} ${plural(tot.D,'difesa','difese')} su ${att(T)}: la difesa tiene.`,score:tot.D/T*8});
     if(tot.B>=2){ const bl=A.players.filter(p=>p.B).sort((a,b)=>b.B-a.B).slice(0,2).map(p=>who(p.n,'L')); B.good.push({head:`${tot.B} murate`,text:`Il muro c’è, soprattutto su ${joinIt(bl)}.`,score:tot.B*1.2}); }
     if(tot.E>=3&&tot.E/T>=.12) B.good.push({head:`Sbagliano ${tot.E} attacchi`,text:`Il ${pct(tot.E/T)}: palla in gioco e pazienza, i punti ce li regalano.`,score:tot.E});
     Object.values(A.team).filter(s=>s.t>=4&&s.K===0).sort(byUse).slice(0,1).forEach(s=>B.good.push({head:`${cap(shotName(s.z,s.d))}: 0 su ${s.t}`,text:'Lì le leggiamo bene.',score:s.t*.5}));
   }
-  /* --- attacco: noi --- */
+  /* ---------------- attacco: noi ---------------- */
   if(N.length>=4){
-    const I=insightsN(N), hl=hole(heat(N));
+    const I=insightsN(N), hl=hole(heat(N)), T=N.length;
     const w=I.work[0];
-    if(w){ const by=I.A.players.filter(p=>p.sh[w.z+w.d]&&p.sh[w.z+w.d].K).map(p=>who(p.n,'N')); B.att.push({kind:'work',tag:'Noi',head:'Insistete '+punchy(w.z,w.d),stat:`${w.K} punti su ${w.t}`,text:`Lì non ci leggono.${by.length?' Punti di '+joinIt(by)+'.':''}`,board:{att:'N',shots:[{z:w.z,d:w.d}]},score:w.K*(.5+w.K/w.t)+.5}); }
-    if(hl&&!(w&&landing(w.z,w.d).some(c=>c[0]===hl.c))) B.att.push({kind:'target',tag:'Noi',head:'Attaccate verso '+cellName(hl.c),stat:`${fmtN(hl.K)} punti su ${fmtN(hl.t)}`,text:'È il loro buco: lì non arrivano.',board:{att:'N',shots:[],hi:[hl.c]},score:hl.K*(.4+hl.K/hl.t)});
+    if(w){ const by=I.A.players.filter(p=>p.sh[w.z+w.d]&&p.sh[w.z+w.d].K).map(p=>who(p.n,'N')); B.items.push({side:'att',kind:'work',tag:'Noi',head:'Insistete '+punchy(w.z,w.d),why:`${w.K} punti su ${w.t}: lì non ci leggono`,n:w.t,text:by.length?`Punti di ${joinIt(by)}.`:'Continuate a cercarlo.',board:{att:'N',shots:[{z:w.z,d:w.d}]},score:w.K*(.5+w.K/w.t)+.5}); }
+    if(hl&&!(w&&landing(w.z,w.d).some(c=>c[0]===hl.c))) B.items.push({side:'att',kind:'target',tag:'Noi',head:'Attaccate verso '+cellName(hl.c),why:`${fmtN(hl.K)} punti su ${fmtN(hl.t)} palloni`,n:Math.round(hl.t),text:'È il loro buco: lì non arrivano.',board:{att:'N',shots:[],hi:[hl.c]},score:hl.K*(.4+hl.K/hl.t)});
+    // a chi dare la palla: chi rende e ne riceve poca, chi ne riceve tanta e rende poco
+    const named=I.A.players.filter(p=>p.n!=='?');
+    const under=T>=10?named.filter(p=>p.t>=3&&p.kp>=.5&&p.t/T<=.2).sort((a,b)=>b.kp-a.kp)[0]:null;
+    const uk=under&&topKill(under), wItem=B.items.find(x=>x.kind==='work');
+    if(under&&uk&&w&&uk.z===w.z&&uk.d===w.d&&wItem){ wItem.text+=` ${NmN(under.n)} riceve solo il ${pct(under.t/T)} dei palloni: cercatela di più.`; wItem.score+=1.5; }
+    else if(under) B.items.push({side:'att',kind:'feed',tag:who(under.n,'N'),head:'Più palloni a '+nmN(under.n),why:`${under.K} punti su ${under.t}, ma riceve solo il ${pct(under.t/T)} dei palloni`,n:under.t,text:`Quando può, il palleggio la cerchi: rende più delle altre.${topKill(under)?' Il suo colpo: '+shotName(topKill(under).z,topKill(under).d)+'.':''}`,board:{att:'N',shots:topKill(under)?[{z:topKill(under).z,d:topKill(under).d}]:[],num:under.n},score:under.K*.9+2});
+    const over=T>=10?named.filter(p=>p.t>=5&&p.t/T>=.3&&p.eff<0).sort((a,b)=>a.eff-b.eff)[0]:null;
+    if(over) B.items.push({side:'att',kind:'unload',tag:who(over.n,'N'),head:'Alleggerite '+nmN(over.n),why:`Prende il ${pct(over.t/T)} dei palloni, efficienza ${spct(over.eff)}`,n:over.t,text:`${over.E} errori e ${over.B} murate. Distribuite di più: le altre stanno rendendo meglio.`,board:{att:'N',shots:worstShot(over)?[{z:worstShot(over).z,d:worstShot(over).d,bad:1}]:[],num:over.n},score:(over.E+over.B)*.8+1});
     const b=I.best[0], bk=b&&topKill(b);
-    if(b&&b.K>=2&&!(w&&bk&&bk.z===w.z&&bk.d===w.d)){ const k=bk, pl=plOf(b.n); B.att.push({kind:'best',tag:who(b.n,'N'),head:'Palla a '+(pl&&pl.nm?pl.nm:'#'+b.n),stat:`${pts(b.K)} su ${att(b.t)}, ${pct(b.kp)} a segno`,text:k?`Il suo colpo: ${shotName(k.z,k.d)} (${k.K} su ${k.t}).`:'È in serata.',board:{att:'N',shots:k?[{z:k.z,d:k.d}]:[],num:b.n},score:b.K*(.55+b.kp)}); }
+    if(b&&b.K>=2&&!(under&&under.n===b.n)&&!(w&&bk&&bk.z===w.z&&bk.d===w.d)) B.items.push({side:'att',kind:'best',tag:who(b.n,'N'),head:NmN(b.n)+' è in serata',why:`${pts(b.K)} su ${att(b.t)}, ${pct(b.kp)} a segno`,n:b.t,text:bk?`Il suo colpo: ${shotName(bk.z,bk.d)} (${bk.K} su ${bk.t}). Nei punti importanti, palla a lei.`:'Nei punti importanti, palla a lei.',board:{att:'N',shots:bk?[{z:bk.z,d:bk.d}]:[],num:b.n},score:b.K*(.55+b.kp)});
     const a=I.avoid[0];
-    if(a) B.att.push({kind:'avoid',tag:'Noi',head:'Evitate '+shotName(a.z,a.d),stat:`${lossOf(a)} persi su ${a.t}`,text:'Tra errori e murate ci costa troppo: cercate altro.',board:{att:'N',shots:[{z:a.z,d:a.d,bad:1}]},score:lossOf(a)*.8});
-    B.att.sort((x,y)=>y.score-x.score);
-    B.att=B.att.slice(0,scope==='tb'?3:2);
+    if(a&&!(over&&worstShot(over)&&worstShot(over).z===a.z&&worstShot(over).d===a.d)) B.items.push({side:'att',kind:'avoid',tag:'Noi',head:'Evitate '+shotName(a.z,a.d),why:`${lossOf(a)} palloni persi su ${a.t}`,n:a.t,text:'Tra errori e murate ci costa troppo: cercate un’altra soluzione.',board:{att:'N',shots:[{z:a.z,d:a.d,bad:1}]},score:lossOf(a)*.8});
   }
+  // ordine: le tre cose da dire adesso, almeno una per lato quando c’è
+  const def=B.items.filter(x=>x.side==='def').sort((a,b)=>b.score-a.score), atk=B.items.filter(x=>x.side==='att').sort((a,b)=>b.score-a.score);
+  const top=[];
+  if(def[0]) top.push(def.shift());
+  if(atk[0]) top.push(atk.shift());
+  const rest=def.concat(atk).sort((a,b)=>b.score-a.score);
+  while(top.length<3&&rest.length) top.push(rest.shift());
+  top.sort((a,b)=>(a.side==='def'?0:1)-(b.side==='def'?0:1)||b.score-a.score);
+  B.now=top; B.more=rest.slice(0,scope==='tb'?5:4);
   B.good.sort((a,b)=>b.score-a.score); B.good=B.good.slice(0,3);
+  B.keys=keyInsights(B);
   return B;
 }
+
+/* la chiave: una frase che legge la partita, oltre i numeri */
+function keyInsights(B){
+  const out=[], L=B.L, N=B.N, tL=B.tL, tN=B.tN;
+  if(L.length>=6&&tL.K>=4){
+    const A=aggregate(L), top=A.players.filter(p=>p.n!=='?').sort((a,b)=>b.K-a.K)[0];
+    const scorers=A.players.filter(p=>p.K>0).length;
+    if(top&&top.K/tL.K>=.4) out.push({s:top.K/tL.K*10,side:'L',title:`Il loro gioco passa dalla #${top.n}`,text:`Fa ${top.K} dei loro ${tL.K} punti. Fermata lei, il loro attacco si spegne.`});
+    else if(scorers>=4) out.push({s:3,side:'L',title:'Fanno punto con tutte',text:`${scorers} giocatrici diverse a segno: non c’è una da marcare, serve ordine in difesa.`});
+    if(tL.E+tL.B>=tL.K&&L.length>=8) out.push({s:4.5,side:'L',title:'Si battono da sole',text:`Tra errori e murate perdono ${tL.E+tL.B} palloni e ne chiudono ${tL.K}: palla in gioco e pazienza.`});
+  }
+  if(L.length>=8&&N.length>=8){
+    const rl=tL.K/L.length, rn=tN.K/N.length, d=rn-rl;
+    if(Math.abs(d)>=.1) out.push({s:Math.abs(d)*25,side:d>0?'N':'L',title:d>0?'In attacco siamo più forti':'Attaccano meglio di noi',text:d>0?`${pct(rn)} a punto contro ${pct(rl)}. Il set lo perde solo chi sbaglia: tenete la palla in gioco.`:`${pct(rl)} a punto contro il nostro ${pct(rn)}. La differenza è lì: palla a chi sta segnando e difesa sui loro colpi preferiti.`});
+  }
+  if(N.length>=6&&tN.K>=4){
+    const A=aggregate(N), top=A.players.filter(p=>p.n!=='?').sort((a,b)=>b.K-a.K)[0];
+    if(top&&top.K/tN.K>=.45) out.push({s:top.K/tN.K*7,side:'N',title:`Il nostro attacco è ${nmN(top.n)}`,text:`${top.K} dei nostri ${tN.K} punti sono suoi. Funziona, ma prima o poi la marcheranno: preparate una seconda soluzione.`});
+  }
+  // il ritmo: gli ultimi palloni contro i precedenti
+  if(L.length>=14){ const last=L.slice(-7), before=L.slice(0,-7), d=kRate(last)-kRate(before); if(Math.abs(d)>=.25) out.push({s:Math.abs(d)*14,side:'L',title:d>0?'Stanno prendendo ritmo':'Li stiamo spegnendo',text:d>0?`Negli ultimi 7 attacchi ne hanno chiusi ${last.filter(e=>e.o==='K').length}: ora serve un cambio, anche solo un time-out.`:`Negli ultimi 7 attacchi ne hanno chiusi ${last.filter(e=>e.o==='K').length}: continuate così, la difesa sta leggendo.`}); }
+  if(B.dL>=.12&&B.oL) out.push({s:B.dL*20,side:'L',title:'Stanno crescendo',text:`Ora chiudono il ${pct(kRate(L))} degli attacchi, ${B.plab} erano al ${pct(kRate(B.oL))}.`});
+  if(B.dL<=-.12&&B.oL) out.push({s:-B.dL*16,side:'N',title:'Li stiamo frenando',text:`Ora chiudono il ${pct(kRate(L))} degli attacchi, ${B.plab} erano al ${pct(kRate(B.oL))}.`});
+  out.sort((a,b)=>b.s-a.s);
+  return out.slice(0,2);
+}
+function briefTitle(scope){ return scope==='tb'?'Tie-break':scope.indexOf('set')===0?'Set '+scope.slice(3):scope==='opp'?'Tutte le partite':'Partita'; }
 function briefText(B){
   const m=cur(), out=[];
-  const title=B.scope==='tb'?'Tie-break':B.scope.indexOf('set')===0?'Set '+B.scope.slice(3):B.scope==='opp'?'Tutte le partite':'Partita';
-  out.push(`*${title}${m.opp.trim()?' vs '+m.opp.trim():''}: cosa fare*`);
+  out.push(`*${briefTitle(B.scope)}${m.opp.trim()?' vs '+m.opp.trim():''}: cosa fare*`);
   const h=[]; if(B.L.length) h.push(`loro ${pct(B.tL.K/B.L.length)} a punto (${B.tL.K}/${B.L.length})`); if(B.N.length) h.push(`noi ${pct(B.tN.K/B.N.length)} (${B.tN.K}/${B.N.length})`);
   if(h.length) out.push(cap(h.join(', '))+'.');
-  let i=0;
-  if(B.def.length){ out.push('','*In difesa*'); B.def.forEach(x=>{ i++; out.push(`${i}. ${x.kind==='threat'||x.kind==='pred'?x.tag+', ':''}${x.head.charAt(0).toLowerCase()+x.head.slice(1)} (${x.stat}). ${x.text}`); }); }
-  if(B.att.length){ out.push('','*In attacco*'); B.att.forEach(x=>{ i++; out.push(`${i}. ${x.head} (${x.stat}). ${x.text}`); }); }
+  if(B.keys.length){ out.push(''); B.keys.forEach(k=>out.push(`*${k.title}.* ${k.text}`)); }
+  if(B.now.length){ out.push('','*Le cose da dire adesso*'); B.now.forEach((x,i)=>out.push(`${i+1}. ${x.head}. ${x.why}. ${x.text}`)); }
+  if(B.more.length){ out.push('','*Poi*'); B.more.forEach(x=>out.push(`- ${x.head}. ${x.why}.`)); }
   if(B.good.length){ out.push('','*Cosa va bene*'); B.good.forEach(g=>out.push(`- ${g.head}. ${g.text}`)); }
   return out.join('\n');
 }
@@ -1390,17 +1474,26 @@ function shotsBoard(shotMap,s,label){
 }
 function arrowLegend(s){ return `<div class="legend"><span><i style="background:${s==='N'?'#13774A':'#C8303B'}"></i>fa punto spesso</span><span><i style="background:#D9820F"></i>a volte</span><span><i style="background:${s==='N'?'#8995A8':'#6F8FC4'}"></i>raramente</span><span>più spessa = più usata</span></div>`; }
 
-function tipCard(x,i,cls){
-  const tagCls=x.kind==='threat'||x.kind==='pred'||x.kind==='best'?'':' plain';
-  return `<article class="tip ${cls}"><span class="rk" aria-label="Priorità ${i}">${i}</span><div class="hd"><span class="who${tagCls}">${esc(x.tag)}</span><h3>${esc(x.head)}</h3><p class="st">${esc(x.stat)}</p></div><p class="tx">${esc(x.text)}</p><div class="bd">${board(Object.assign({label:x.head},x.board))}</div></article>`;
+const sideChip=x=>`<span class="sidechip ${x.side}">${x.side==='def'?'Difesa':'Attacco'}</span>`;
+const confChip=n=>{ const c=conf(n); return `<span class="conf ${c.k}" title="Basato su ${n} palloni"><i></i>${c.l}</span>`; };
+function tipCard(x,i){
+  return `<article class="tip ${x.side}"><div class="tip-top"><span class="rk" aria-label="Priorità ${i}">${i}</span>${sideChip(x)}${x.kind==='threat'||x.kind==='pred'||x.kind==='feed'||x.kind==='unload'||x.kind==='best'?`<span class="who">${esc(x.tag)}</span>`:''}</div><h3>${esc(x.head)}</h3><p class="why">${esc(x.why)}</p><div class="bd">${board(Object.assign({label:x.head},x.board))}</div><p class="tx">${esc(x.text)}</p><p class="meta">${confChip(x.n)}</p></article>`;
+}
+function moreRow(x){
+  return `<details class="more ${x.side}"><summary><span class="dot" aria-hidden="true"></span><span class="mt"><b>${esc(x.head)}</b><small>${esc(x.why)}</small></span><svg class="i chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5L8 10.5l4-4"/></svg></summary><div class="more-body"><p class="tx">${esc(x.text)}</p><div class="bd">${board(Object.assign({label:x.head},x.board))}</div><p class="meta">${confChip(x.n)}</p></div></details>`;
+}
+function keyCard(B){
+  if(!B.keys.length) return '';
+  const [k,k2]=B.keys;
+  return `<section class="key ${k.side}" aria-label="La chiave"><p class="key-l">La chiave</p><h2>${esc(k.title)}</h2><p class="key-t">${esc(k.text)}</p>${k2?`<p class="key-2"><b>${esc(k2.title)}.</b> ${esc(k2.text)}</p>`:''}</section>`;
 }
 function emptyState(title,text,btn,go){ return `<div class="empty"><div class="ill">${board({att:'L',shots:[{z:'4',d:'D'}],defend:true,label:''})}</div><h3>${esc(title)}</h3><p>${esc(text)}</p><button class="btn ball" data-go="${go||'scout'}">${esc(btn||'Vai allo scout')}</button></div>`; }
 function sitrep(B){
   const m=cur();
-  const card=(lab,c,arr,dir,tr,good)=>{ const T=totals(arr); if(!arr.length) return `<div class="sit"><p class="k"><i style="--c:${c}"></i>${esc(lab)}</p><div class="v"><b>–</b><span>nessun attacco</span></div></div>`;
-    const arrow=dir>0?'in crescita':dir<0?'in calo':'';
-    return `<div class="sit"><p class="k"><i style="--c:${c}"></i>${esc(lab)}</p><div class="v"><b>${pct(T.K/arr.length)}</b><span>${T.K} su ${arr.length}</span></div>${arrow||tr?`<p class="tr">${arrow?`<em>${arrow}</em>${tr?', ':''}`:''}${esc(tr||'')}</p>`:''}</div>`; };
-  return `<div class="sitrep">${card(oppLabel(m)+' a punto','var(--L1)',B.L,B.dirL,B.trL)}${card(teamLabel()+' a punto','var(--N1)',B.N,B.dirN,B.trN)}</div>`;
+  const card=(lab,c,arr,d,old,plab)=>{ const T=totals(arr); if(!arr.length) return `<div class="sit"><p class="k"><i style="--c:${c}"></i>${esc(lab)}</p><div class="v"><b>–</b><span>nessun attacco</span></div></div>`;
+    const tr=d>=.08?`<em class="up">in crescita</em>, ${esc(plab)} ${pct(kRate(old))}`:d<=-.08?`<em class="down">in calo</em>, ${esc(plab)} ${pct(kRate(old))}`:'';
+    return `<div class="sit"><p class="k"><i style="--c:${c}"></i>${esc(lab)}</p><div class="v"><b>${pct(T.K/arr.length)}</b><span>${T.K} su ${arr.length} a punto</span></div>${tr?`<p class="tr">${tr}</p>`:''}</div>`; };
+  return `<div class="sitrep">${card(oppLabel(m),'var(--L1)',B.L,B.dL,B.oL,B.plab)}${card(teamLabel(),'var(--N1)',B.N,B.dN,B.oN,B.plab)}</div>`;
 }
 function renderTips(){
   const box=$('#v-tips'), m=cur();
@@ -1419,17 +1512,17 @@ function renderTips(){
 }
 function briefHTML(scope){
   const B=buildBrief(scope);
-  const T=scope==='tb'?'Tie-break':scope.indexOf('set')===0?'Set '+scope.slice(3):'Partita';
   if(B.L.length<4&&B.N.length<4) return sitrep(B)+emptyState('Servono più attacchi',`Le indicazioni arrivano dal quarto attacco segnato. ${scope.indexOf('set')===0?'In questo set':'Per ora'}: ${att(B.L.length+B.N.length)}.`);
-  let h=sitrep(B), i=0;
-  if(B.def.length){ h+=`<div class="sec-h"><h2>In difesa</h2><small>${esc(T)}, loro in attacco</small></div><div class="tips">${B.def.map(x=>tipCard(x,++i,'def')).join('')}</div>`; }
-  else if(B.L.length>=4) h+=`<div class="sec-h"><h2>In difesa</h2></div><p class="on-tiny">Nessuna minaccia chiara: nessuna giocatrice o colpo fa punti con regolarità.</p>`;
-  if(B.att.length){ h+=`<div class="sec-h"><h2>In attacco</h2><small>Noi</small></div><div class="tips">${B.att.map(x=>tipCard(x,++i,'att')).join('')}</div>`; }
+  let h=sitrep(B)+keyCard(B);
+  if(B.now.length) h+=`<div class="sec-h"><h2>Da dire adesso</h2><small>${esc(briefTitle(scope))}</small></div><div class="tips">${B.now.map((x,i)=>tipCard(x,i+1)).join('')}</div>`;
+  else h+=`<p class="on-tiny" style="margin:16px 2px">Ancora niente di netto: nessuna giocatrice o colpo fa la differenza con regolarità.</p>`;
+  if(B.more.length) h+=`<div class="sec-h"><h2>Poi</h2><small>Tocca per aprire</small></div><div class="mores">${B.more.map(moreRow).join('')}</div>`;
   if(B.good.length) h+=`<div class="sec-h"><h2>Cosa va bene</h2></div><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul>`;
-  h+=`<p class="on-tiny" style="margin:14px 2px 0">${esc(scopeLabel(scope))}. ${scope==='tb'?'Se ci sono almeno 3 set, gli ultimi due vengono confrontati con i precedenti. ':''}Sotto i 3 attacchi una giocatrice non entra nelle priorità.</p>`;
-  h+=`<div class="ind-acts"><button class="btn ball" data-show>${svgI('M3 6.5V3h3.5M9.5 3H13v3.5M13 9.5V13H9.5M6.5 13H3V9.5')}<span>Mostra alle giocatrici</span></button><button class="btn glass" data-send>${IC.share}<span>Manda</span></button></div>`;
+  h+=`<p class="on-tiny" style="margin:16px 2px 0">${esc(scopeLabel(scope))}. ${scope==='tb'?'Gli ultimi due set vengono confrontati con i precedenti. ':''}Sotto i 3 attacchi una giocatrice non entra nelle indicazioni.</p>`;
+  h+=`<div class="ind-acts"><button class="btn ball" data-show>${svgI('M3 6.5V3h3.5M9.5 3H13v3.5M13 9.5V13H9.5M6.5 13H3V9.5')}<span>Mostra alle giocatrici</span></button><button class="btn glass" data-send aria-label="Manda il testo">${IC.share}<span>Manda</span></button></div>`;
   return h;
 }
+
 function playerCard(p,s,rank){
   const facts=s==='N'?usFacts(p):threatFacts(p);
   const pl=s==='N'&&p.n!=='?'?plOf(p.n):null;
@@ -1480,13 +1573,15 @@ $('#v-tips').addEventListener('click',e=>{
 /* presentazione a tutto schermo: una priorità per pagina */
 let showIdx=0;
 function openShow(B){
-  const items=B.def.map(x=>[x,'def']).concat(B.att.map(x=>[x,'att']));
-  if(!items.length&&!B.good.length){ toast('Ancora niente da mostrare: servono più attacchi.'); return; }
-  const m=cur(), T=B.scope==='tb'?'Tie-break':B.scope.indexOf('set')===0?'Set '+B.scope.slice(3):'Partita';
-  const pages=items.map(([x,c],i)=>`<section class="page ${c}" aria-label="Priorità ${i+1} di ${items.length}"><div class="rk"><b>${i+1}</b><span>${esc(x.tag)}</span></div><h2>${esc(x.head)}</h2><p class="st">${esc(x.stat)}</p><div class="bdw">${board(Object.assign({label:x.head},x.board))}</div><p class="tx">${esc(x.text)}</p></section>`);
-  if(B.good.length) pages.push(`<section class="page" aria-label="Cosa va bene"><div class="rk"><b style="color:#3DDC97">✓</b></div><h2>Cosa va bene</h2><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul></section>`);
+  const items=B.now.concat(B.more);
+  if(!items.length&&!B.good.length&&!B.keys.length){ toast('Ancora niente da mostrare: servono più attacchi.'); return; }
+  const m=cur();
+  const pages=[];
+  if(B.keys.length){ const k=B.keys[0]; pages.push(`<section class="page keyp" aria-label="La chiave"><p class="key-l">La chiave</p><h2>${esc(k.title)}</h2><p class="tx">${esc(k.text)}</p>${B.keys[1]?`<p class="tx dim"><b>${esc(B.keys[1].title)}.</b> ${esc(B.keys[1].text)}</p>`:''}</section>`); }
+  items.forEach((x,i)=>pages.push(`<section class="page ${x.side}" aria-label="Indicazione ${i+1} di ${items.length}"><div class="rk"><b>${i+1}</b>${sideChip(x)}</div><h2>${esc(x.head)}</h2><p class="st">${esc(x.why)}</p><div class="bdw">${board(Object.assign({label:x.head},x.board))}</div><p class="tx">${esc(x.text)}</p></section>`));
+  if(B.good.length) pages.push(`<section class="page" aria-label="Cosa va bene"><div class="rk"><b class="okb">${svgI('M3 8.5l3.2 3L13 4.5')}</b></div><h2>Cosa va bene</h2><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul></section>`);
   const sh=$('#show');
-  sh.innerHTML=`<div class="show-top"><b>${esc(T)}${m.opp.trim()?' vs '+esc(m.opp.trim()):''}</b><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div><div class="pages" id="pages">${pages.join('')}</div><div class="show-foot"><button class="iconbtn" data-sstep="-1" aria-label="Indietro">${svgI('M10 3.5L5.5 8l4.5 4.5')}</button><div class="pdots" id="pdots">${pages.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div><button class="iconbtn" data-sstep="1" aria-label="Avanti">${svgI('M6 3.5L10.5 8 6 12.5')}</button></div>`;
+  sh.innerHTML=`<div class="show-top"><b>${esc(briefTitle(B.scope))}${m.opp.trim()?' vs '+esc(m.opp.trim()):''}</b><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div><div class="pages" id="pages">${pages.join('')}</div><div class="show-foot"><button class="iconbtn" data-sstep="-1" aria-label="Indietro">${svgI('M10 3.5L5.5 8l4.5 4.5')}</button><div class="pdots" id="pdots">${pages.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div><button class="iconbtn" data-sstep="1" aria-label="Avanti">${svgI('M6 3.5L10.5 8 6 12.5')}</button></div>`;
   sh.hidden=false; void sh.offsetWidth; sh.classList.add('open');
   showIdx=0;
   const pg=$('#pages');
@@ -1545,42 +1640,123 @@ $('#v-team').addEventListener('click',e=>{
 });
 
 /* =========================================================
-   DATI
+   IMPOSTAZIONI
    ========================================================= */
 function renderCloudBits(){
-  const el=$('#cloudLine'); if(el){ el.textContent=cloudLine(); el.className='cloud '+(cloudOK()?'ok':cloud.state); }
+  const el=$('#cloudLine'); if(el){ el.textContent=cloudLine(); el.closest('.row').classList.toggle('ok',cloudOK()); }
   if(view==='scout'&&!(sel.n||sel.z||sel.o)&&!(flash&&Date.now()<flash.until)) renderDock();
 }
-function renderData(){
+const chev='<svg class="i chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5L10.5 8 6 12.5"/></svg>';
+const sw=(k,t,s)=>`<div class="row"><div class="rl"><b id="pl-${k}">${t}</b><small>${s}</small></div><button class="switch" role="switch" aria-checked="${!!prefs[k]}" aria-labelledby="pl-${k}" data-pref="${k}"><i></i></button></div>`;
+const tile=(id,ic,t,s,cls)=>`<button class="tile${cls?' '+cls:''}" id="${id}"><span class="ti">${ic}</span><b>${t}</b><small>${s}</small></button>`;
+function renderSettings(){
   const m=cur(), all=Object.values(db.matches), total=all.reduce((a,x)=>a+x.ev.length,0);
-  const canRead=!!(navigator.clipboard&&navigator.clipboard.readText)&&!readBlocked;
   const showInstall=GH&&!isStandalone();
   const canCam=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
-  $('#v-data').innerHTML=`${(storageOK||cloud.state==='on')?'':'<div class="warnbox"><b>Attenzione:</b> questo browser non riesce a salvare i dati. Prima di chiudere mostra il QR o copia il backup.</div>'}<p id="cloudLine"></p>
-<div class="dgrid">
-<section class="card"><h2>${IC.qr}Passa la partita col QR</h2><p class="sub">Tra due telefoni vicini: uno mostra, l’altro scansiona e unisce i dati senza doppioni.</p><div class="btnrow"><button class="btn primary" id="qrShow">${IC.qr}<span>Mostra QR</span></button>${canCam?`<button class="btn ghost" id="qrScan">${IC.cam}<span>Scansiona</span></button>`:''}</div></section>
-<section class="card"><h2>${IC.code}Salva come testo</h2><p class="sub">Una riga e un codice corto. Mandalo su WhatsApp a te stesso: incollandolo qui ritrovi la partita intera.</p><div class="btnrow"><button class="btn ghost" id="shCode">${IC.share}<span>Prepara il codice</span></button></div></section>
-<section class="card wide"><h2>${IC.merge}Recupera o unisci</h2><p class="sub">Incolla un codice, anche della versione precedente di Scout. Se la partita c’è già aggiungo solo gli attacchi nuovi.</p><textarea class="paste" id="importBox" placeholder="Incolla qui il messaggio con il codice" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div class="btnrow" style="padding-top:0">${canRead?'<button class="btn ghost" id="pasteBtn">Incolla</button>':''}<button class="btn primary" id="importBtn">Recupera</button></div></section>
-<section class="card"><h2>${IC.doc}Backup completo</h2><p class="sub">Tutte le partite (${all.length}), ${att(total)} e la tua squadra in un solo codice. Fallo prima di cambiare telefono.</p><div class="btnrow"><button class="btn ghost" id="bkQR">${IC.qr}<span>QR</span></button><button class="btn ghost" id="shBackup">${IC.copy}<span>Testo</span></button></div></section>
-<section class="card"><h2>${IC.table}Tabella per Excel</h2><p class="sub">Ogni attacco di questa partita su una riga: set, chi, colpo, esito.</p><div class="btnrow"><button class="btn ghost" id="csvBtn">${IC.table}<span>Esporta</span></button></div></section>
-${showInstall?`<section class="card wide"><h2>${IC.home}Installala sulla schermata Home</h2><p class="sub">Si apre come un’app, funziona senza rete e il telefono non le cancella i dati.</p><div class="btnrow"><button class="btn ball" id="shInstall">${installEvt?'Installa l’app':'Come si fa'}</button></div></section>`:''}
-</div>
-<p class="on-tiny" style="margin-top:16px;max-width:70ch">${GH?'Per darla a qualcun altro basta mandargli il link: ognuno tiene i propri dati. La versione precedente resta su ':'Ogni dispositivo conserva i propri dati. '}${GH?'<a href="legacy/" style="color:#fff;font-weight:700">/legacy</a>, con gli stessi dati.':''}</p>`;
+  const fine=mq('(pointer: fine)');
+  $('#v-settings').innerHTML=`${(storageOK||cloud.state==='on')?'':'<div class="warnbox"><b>Attenzione:</b> questo browser non riesce a salvare i dati. Prima di chiudere mostra il QR o copia il backup.</div>'}
+<div class="settings">
+<section class="sgroup"><h2 class="sg-h">Partita aperta</h2><div class="list">
+  <label class="row"><div class="rl"><b>Avversaria</b><small>Appare nello scout e nei messaggi</small></div><input class="input inl" id="stOpp" type="text" maxlength="40" value="${esc(m.opp)}" placeholder="Nome squadra" autocomplete="off" autocapitalize="words" enterkeyhint="done"></label>
+  <label class="row"><div class="rl"><b>Data</b><small>Serve a ritrovarla tra le partite</small></div><input class="input inl" id="stDate" type="date" value="${esc(m.date)}"></label>
+  <button class="row link" id="stRoster"><div class="rl"><b>Rosa avversaria</b><small>I numeri di chi attacca di là</small></div><span class="rv">${m.roster.length?m.roster.length+' '+plural(m.roster.length,'numero','numeri'):'da fare'}</span>${chev}</button>
+  <button class="row link" id="stMatches"><div class="rl"><b>Le tue partite</b><small>Apri, crea o elimina</small></div><span class="rv">${all.length}</span>${chev}</button>
+</div></section>
+
+<section class="sgroup"><h2 class="sg-h">Passa i dati</h2><p class="sg-s">Tra due telefoni, in una chat o in Excel. Legge anche i codici della versione precedente.</p><div class="tiles">
+  ${tile('qrShow',IC.qr,'Mostra QR','L’altro telefono lo inquadra','primary')}
+  ${canCam?tile('qrScan',IC.cam,'Scansiona QR','Unisce i dati senza doppioni'):''}
+  ${tile('shCode',IC.code,'Salva come testo','Un codice da mandarti su WhatsApp')}
+  ${tile('stRecover',IC.merge,'Recupera da un codice','Incolla un messaggio salvato')}
+  ${tile('stBackup',IC.doc,'Backup completo',`${all.length} ${plural(all.length,'partita','partite')}, ${att(total)} e la squadra`)}
+  ${tile('csvBtn',IC.table,'Tabella per Excel','Un attacco per riga')}
+</div></section>
+
+<section class="sgroup"><h2 class="sg-h">In partita</h2><div class="list">
+  ${sw('haptics','Vibrazione','Una piccola vibrazione a ogni tocco e a ogni attacco salvato')}
+  ${sw('wipe','Cambio colore animato','Lo schermo si colora partendo dal tasto quando cambi chi attacca')}
+  ${sw('sideHint','Suggerisci il cambio lato','Dopo una difesa il tasto dell’altra squadra lampeggia')}
+  ${sw('names','Nomi sulle maglie','Sotto i numeri della tua squadra')}
+  ${sw('big','Tasti più alti','Per tablet o per chi segna con il telefono in mano mentre guarda il campo')}
+</div></section>
+
+<section class="sgroup"><h2 class="sg-h">App</h2><div class="list">
+  <div class="row save"><div class="rl"><b>Salvataggio</b><small id="cloudLine"></small></div></div>
+  ${showInstall?`<button class="row link" id="shInstall"><div class="rl"><b>Installa sulla schermata Home</b><small>Si apre come un’app, funziona senza rete e il telefono non le cancella i dati</small></div>${chev}</button>`:''}
+  ${fine?`<button class="row link" id="stKeys"><div class="rl"><b>Scorciatoie da tastiera</b><small>Per segnare da PC senza mouse</small></div>${chev}</button>`:''}
+  ${GH?`<a class="row link" href="legacy/"><div class="rl"><b>Versione precedente</b><small>Resta qui, con gli stessi dati di questo dispositivo</small></div>${chev}</a>`:''}
+  <div class="row"><div class="rl"><b>Scout</b><small>Funziona senza rete. Ogni dispositivo tiene i propri dati: per darla a qualcuno basta mandare il link.</small></div></div>
+</div></section>
+</div>`;
   renderCloudBits();
+  $('#stOpp').addEventListener('input',e=>{ m.opp=e.target.value.slice(0,40); save(); renderHeader(); });
+  $('#stOpp').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } });
+  $('#stDate').addEventListener('change',e=>{ if(/^\d{4}-\d{2}-\d{2}$/.test(e.target.value)){ m.date=e.target.value; save(); renderHeader(); } });
+  $('#stRoster').onclick=()=>openRoster(false);
+  $('#stMatches').onclick=openMatches;
   const ib=$('#shInstall'); if(ib) ib.onclick=doInstall;
+  const kb=$('#stKeys'); if(kb) kb.onclick=openShortcuts;
   $('#qrShow').onclick=()=>{ if(!m.ev.length&&!m.roster.length){ toast('Segna prima qualche attacco.'); return; } showQR(m.opp.trim()?'Partita contro '+m.opp.trim():'Partita del '+fmtDate(m.date),encode([m],false),att(m.ev.length)); };
   const qs=$('#qrScan'); if(qs) qs.onclick=openScanner;
-  $('#shCode').onclick=()=>{ if(!m.ev.length){ toast('Segna prima qualche attacco.'); return; } textSheet('Salva la partita',saveMessage(m),'Per ritrovarla incolla questo testo in Dati, su qualsiasi telefono con Scout.',true); };
-  $('#importBtn').onclick=()=>doImport($('#importBox').value);
+  $('#shCode').onclick=()=>{ if(!m.ev.length){ toast('Segna prima qualche attacco.'); return; } textSheet('Salva la partita',saveMessage(m),'Per ritrovarla incolla questo testo in Impostazioni, Recupera da un codice, su qualsiasi telefono con Scout.',true); };
+  $('#stRecover').onclick=openRecover;
+  $('#stBackup').onclick=openBackup;
+  $('#csvBtn').onclick=exportCsv;
+}
+$('#v-settings').addEventListener('click',e=>{
+  const s=e.target.closest('[data-pref]'); if(!s) return;
+  const k=s.dataset.pref; prefs[k]=!prefs[k]; s.setAttribute('aria-checked',String(prefs[k])); savePrefs(); if(prefs.haptics) buzz(8);
+});
+function openRecover(){
+  const canRead=!!(navigator.clipboard&&navigator.clipboard.readText)&&!readBlocked;
+  openSheet(`<div class="sh-head"><h2 id="sheetTitle">Recupera da un codice</h2>${closeBtn()}</div><p class="sub" style="margin-bottom:12px">Incolla il messaggio con il codice, anche della versione precedente di Scout. Se la partita c’è già aggiungo solo gli attacchi nuovi.</p><textarea class="paste" id="importBox" placeholder="Incolla qui il messaggio con il codice" autocomplete="off" autocapitalize="off" spellcheck="false" data-autofocus></textarea><div class="btnrow" style="margin-top:4px">${canRead?'<button class="btn ghost" id="pasteBtn">Incolla</button>':''}<button class="btn primary" id="importBtn">Recupera</button></div>`);
+  const go=t=>{ if(doImport(t)&&!$('#scrim').hidden&&$('#importBox')) closeSheet(); };
+  $('#importBtn').onclick=()=>go($('#importBox').value);
   const pb=$('#pasteBtn');
   if(pb) pb.onclick=()=>{
-    navigator.clipboard.readText().then(t=>{ $('#importBox').value=t||''; if(t&&t.trim()) doImport(t); else toast('Negli appunti non c’è testo.'); })
+    navigator.clipboard.readText().then(t=>{ $('#importBox').value=t||''; if(t&&t.trim()) go(t); else toast('Negli appunti non c’è testo.'); })
       .catch(()=>{ readBlocked=true; pb.remove(); $('#importBox').focus(); toast('Tieni premuto nel riquadro e scegli Incolla.'); });
   };
-  const bkList=()=>all.filter(x=>x.ev.length||x.roster.length||x.opp.trim());
-  $('#shBackup').onclick=()=>{ const list=bkList(); if(!list.length&&!teamHasData(db.team)){ toast('Non c’è ancora niente da salvare.'); return; } textSheet('Backup completo',backupMessage(list),'Salvalo in una chat o nelle note. Per ripristinarlo incollalo in “Recupera o unisci”.',true); };
-  $('#bkQR').onclick=()=>{ const list=bkList(); if(!list.length&&!teamHasData(db.team)){ toast('Non c’è ancora niente da salvare.'); return; } showQR('Backup completo',encode(list,true),`${list.length} ${plural(list.length,'partita','partite')}, ${att(list.reduce((a,x)=>a+x.ev.length,0))}`); };
-  $('#csvBtn').onclick=exportCsv;
+}
+function openBackup(){
+  const list=Object.values(db.matches).filter(x=>x.ev.length||x.roster.length||x.opp.trim());
+  if(!list.length&&!teamHasData(db.team)){ toast('Non c’è ancora niente da salvare.'); return; }
+  const n=list.reduce((a,x)=>a+x.ev.length,0);
+  openSheet(`<div class="sh-head"><h2 id="sheetTitle">Backup completo</h2>${closeBtn()}</div><p class="sub">${list.length} ${plural(list.length,'partita','partite')}, ${att(n)} e la tua squadra in un solo codice. Fallo prima di cambiare telefono.</p><div class="btnrow"><button class="btn primary" id="bkQR">${IC.qr}<span>Come QR</span></button><button class="btn ghost" id="bkTxt">${IC.copy}<span>Come testo</span></button></div>`);
+  $('#bkQR').onclick=()=>showQR('Backup completo',encode(list,true),`${list.length} ${plural(list.length,'partita','partite')}, ${att(n)}`);
+  $('#bkTxt').onclick=()=>textSheet('Backup completo',backupMessage(list),'Salvalo in una chat o nelle note. Per ripristinarlo incollalo in Recupera da un codice.',true);
+}
+
+/* =========================================================
+   SET: chiaro e immediato
+   ========================================================= */
+const setName=s=>s===5?'Tie-break':'Set '+s;
+function setStats(m){ const c={1:0,2:0,3:0,4:0,5:0}; m.ev.forEach(e=>{ c[e.s]=(c[e.s]||0)+1; }); return c; }
+function renderSetControl(){
+  const m=cur(), c=setStats(m);
+  $('#setNum').textContent=m.set===5?'TB':String(m.set);
+  $('#setBtn').setAttribute('aria-label',`${setName(m.set)} in corso. Cambia set`);
+  $('#setBar').innerHTML=[1,2,3,4,5].map(s=>`<i class="${s===m.set?'cur':c[s]?'done':''}"></i>`).join('');
+  $$('#sets button').forEach(b=>{ const s=+b.dataset.set; b.setAttribute('aria-pressed',String(s===m.set)); const k=b.querySelector('small'); if(k) k.textContent=c[s]?c[s]+' att.':s===m.set?'ora':''; b.setAttribute('aria-label',setName(s)+(c[s]?', '+att(c[s]):'')+(s===m.set?', in corso':'')); });
+  moveSetPill();
+}
+function moveSetPill(){ const b=$('#sets button[aria-pressed="true"]'), p=$('#sets .pill'); if(b&&p&&b.offsetWidth){ p.style.width=b.offsetWidth+'px'; $('#sets').style.setProperty('--sx',(b.offsetLeft-4)+'px'); } }
+function changeSet(s,announce){
+  const m=cur(), prev=m.set; if(s===prev) return;
+  m.set=s; save(); buzz(10);
+  renderHeader();
+  if(view==='scout') renderDock(); else if(view==='tips'){ tipsUI.scope=null; renderTips(); }
+  if(announce){
+    const had=m.ev.filter(e=>e.s===prev).length;
+    if(s>prev&&had>=4) toast(`${setName(s)}: si parte.`,`Indicazioni ${setName(prev).toLowerCase()}`,()=>{ tipsUI={scope:'set'+prev,tab:'brief'}; show('tips'); });
+    else toast(`${setName(s)}: gli attacchi vanno qui.`);
+  }
+}
+function openSetSheet(){
+  const m=cur(), c=setStats(m), nx=m.set<5?m.set+1:null;
+  openSheet(`<div class="sh-head"><h2 id="sheetTitle">Che set si gioca?</h2>${closeBtn()}</div>${nx?`<button class="btn ball block" id="nextSet">${svgI('M6 3.5L10.5 8 6 12.5')}<span>Inizia ${nx===5?'il tie-break':'il set '+nx}</span></button>`:''}<div class="setgrid">${[1,2,3,4,5].map(s=>`<button class="settile${s===5?' tb':''}" data-set="${s}" aria-pressed="${s===m.set}"><b>${s===5?'TB':s}</b><span>${setName(s)}</span><small>${s===m.set?'in corso':c[s]?att(c[s]):'da giocare'}</small></button>`).join('')}</div><p class="tiny" style="margin-top:12px">Ogni attacco viene segnato nel set scelto. Puoi tornare a un set già giocato per aggiungere o correggere.</p>`);
+  const nb=$('#nextSet'); if(nb) nb.onclick=()=>{ closeSheet(); changeSet(nx,true); };
+  $('.setgrid').addEventListener('click',e=>{ const b=e.target.closest('[data-set]'); if(!b) return; const s=+b.dataset.set; closeSheet(); if(s!==m.set) changeSet(s,true); });
 }
 
 /* =========================================================
@@ -1662,6 +1838,7 @@ function openShortcuts(){
 <li><b><kbd>L</kbd> <kbd>N</kbd></b>Attaccano loro, attacchiamo noi</li>
 <li><b><kbd>Esc</kbd></b>Azzera la scelta in corso</li>
 <li><b><kbd>Ctrl</kbd>+<kbd>Z</kbd></b>Annulla l’ultimo attacco</li>
+<li><b><kbd>+</kbd></b>Inizia il set successivo</li>
 <li><b><kbd>I</kbd> <kbd>S</kbd></b>Indicazioni, torna allo scout</li></ul>`);
 }
 
@@ -1779,6 +1956,7 @@ function toast(msg,actLabel,actFn){
 function hideToast(){ $('#toast').classList.remove('show'); }
 
 /* ---------- avvio ---------- */
+applyPrefs();
 buildCourt();
 save();
 renderHeader();
@@ -1787,8 +1965,8 @@ requestAnimationFrame(()=>{ moveInd(); moveSetPill(); });
 if(GH){
   try{ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{}); }catch(e){}
   try{ if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{}); }catch(e){}
-  window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; if(view==='data') renderData(); });
-  window.addEventListener('appinstalled',()=>{ installEvt=null; if(view==='data') renderData(); toast('App installata: da ora aprila dall’icona.'); });
+  window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; if(view==='settings') renderSettings(); });
+  window.addEventListener('appinstalled',()=>{ installEvt=null; if(view==='settings') renderSettings(); toast('App installata: da ora aprila dall’icona.'); });
   let hinted=false; try{ hinted=!!localStorage.getItem('scout-install-hint'); }catch(e){}
   if(!isStandalone()&&!hinted&&mq('(pointer: coarse)')) setTimeout(()=>{ try{ localStorage.setItem('scout-install-hint','1'); }catch(e){} toast('Installala sulla schermata Home: così non perdi mai i dati.','Come',doInstall); },1800);
 }

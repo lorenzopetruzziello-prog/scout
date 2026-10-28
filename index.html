@@ -22,14 +22,15 @@
 <header class="appbar">
   <div class="bar-row">
     <button class="matchbtn" id="matchBtn" aria-haspopup="dialog"><span class="mb"><span class="mk" id="mbKick">Partita</span><span class="mn" id="matchName">Nuova partita</span></span><svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.5L8 10.5l4-4"/></svg></button>
-    <div class="sets" id="sets" role="group" aria-label="Set in corso"><i class="pill" aria-hidden="true"></i><button data-set="1" aria-pressed="true" aria-label="Set 1">1</button><button data-set="2" aria-pressed="false" aria-label="Set 2">2</button><button data-set="3" aria-pressed="false" aria-label="Set 3">3</button><button data-set="4" aria-pressed="false" aria-label="Set 4">4</button><button data-set="5" aria-pressed="false" aria-label="Set 5, tie-break">5</button></div>
+    <button class="setbtn" id="setBtn" aria-haspopup="dialog"><span class="sb-t"><span class="sb-l">Set</span><b id="setNum">1</b></span><span class="sb-bar" id="setBar" aria-hidden="true"></span></button>
+    <div class="sets" id="sets" role="group" aria-label="Set in corso"><span class="sets-l" aria-hidden="true">Set</span><i class="pill" aria-hidden="true"></i><button data-set="1" aria-label="Set 1" aria-pressed="true"><span>1</span><small></small></button><button data-set="2" aria-label="Set 2" aria-pressed="false"><span>2</span><small></small></button><button data-set="3" aria-label="Set 3" aria-pressed="false"><span>3</span><small></small></button><button data-set="4" aria-label="Set 4" aria-pressed="false"><span>4</span><small></small></button><button data-set="5" aria-label="Tie-break" aria-pressed="false"><span>TB</span><small></small></button></div>
   </div>
   <nav class="tabs" role="tablist" aria-label="Sezioni">
     <i class="ind" aria-hidden="true"></i>
     <button role="tab" id="t-scout" data-v="scout" aria-selected="true" aria-controls="v-scout">Scout</button>
     <button role="tab" id="t-tips" data-v="tips" aria-selected="false" aria-controls="v-tips" tabindex="-1">Indicazioni</button>
     <button role="tab" id="t-team" data-v="team" aria-selected="false" aria-controls="v-team" tabindex="-1">Squadra</button>
-    <button role="tab" id="t-data" data-v="data" aria-selected="false" aria-controls="v-data" tabindex="-1">Dati</button>
+    <button role="tab" id="t-settings" data-v="settings" aria-selected="false" aria-controls="v-settings" tabindex="-1">Impostazioni</button>
   </nav>
 </header>
 
@@ -56,7 +57,7 @@
   </section>
   <section class="view" id="v-tips" role="tabpanel" aria-labelledby="t-tips" hidden></section>
   <section class="view" id="v-team" role="tabpanel" aria-labelledby="t-team" hidden></section>
-  <section class="view" id="v-data" role="tabpanel" aria-labelledby="t-data" hidden></section>
+  <section class="view" id="v-settings" role="tabpanel" aria-labelledby="t-settings" hidden></section>
 </main>
 </div>
 <div class="ground" aria-hidden="true"><i class="gL"></i><i class="gN"></i><i class="gG"></i></div>

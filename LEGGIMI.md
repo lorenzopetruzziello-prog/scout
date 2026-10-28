@@ -30,16 +30,17 @@ Su iPhone i dati di Safari e quelli dell'app sulla Home sono separati: installal
 
 ## Come si usa, in breve
 - **Scout:** in alto scegli chi attacca. Tutto lo schermo **blu** = attaccano loro, **arancio** = attaccate voi. Poi numero, colpo ed esito, in qualsiasi ordine: si salva da solo. Il **+** tra i numeri apre la rosa.
-- **Indicazioni:** *Cosa dire* sono le priorità del set (o della partita, o del tie-break), in ordine, ognuna con il campo disegnato: dove mettersi, dove murare, dove attaccare. **Mostra alle giocatrici** le apre a tutto schermo, una per pagina, da far vedere al timeout. *Avversarie* e *Noi* hanno le schede di ogni giocatrice, *Campo* il confronto zona per zona.
+- **Set:** il tasto **Set** in alto mostra il set in corso e quelli già giocati; toccalo e scegli **Inizia il set successivo**. Su tablet e PC i set sono sempre visibili in alto a destra.
+- **Indicazioni:** *Cosa dire* parte dalla **chiave** della partita (cosa sta decidendo il set), poi le **tre cose da dire adesso**, ognuna con il campo disegnato e quanto è affidabile il dato. Sotto, le altre indicazioni da aprire con un tocco e cosa sta andando bene. **Mostra alle giocatrici** le apre a tutto schermo, una per pagina, per il timeout. *Avversarie*, *Noi* e *Campo* hanno il dettaglio.
 - **Squadra:** numeri, nomi e ruoli delle tue giocatrici. Il Libero non compare tra chi attacca.
-- **Dati:** QR, codice testuale, backup completo, tabella per Excel. Legge anche i codici della versione precedente.
-- **Da PC:** numero di maglia sulla tastiera, poi **P** punto, **D** difesa, **M** murata, **E** errore. **L** e **N** cambiano lato, **I** apre le indicazioni, **Ctrl+Z** annulla.
+- **Impostazioni:** la partita aperta, il passaggio dati (QR, codice di testo, recupero, backup, Excel, anche dalla versione precedente), le preferenze in partita (vibrazione, cambio colore animato, suggerimento del cambio lato, nomi sulle maglie, tasti più alti) e l'installazione.
+- **Da PC:** numero di maglia sulla tastiera, poi **P** punto, **D** difesa, **M** murata, **E** errore. **L** e **N** cambiano lato, **+** inizia il set successivo, **I** apre le indicazioni, **Ctrl+Z** annulla.
 
 ## La versione precedente
 È salvata nella cartella `legacy/` e resta online su **https://TUONOMEUTENTE.github.io/scout/legacy/**. Sullo stesso telefono usa gli stessi dati della versione nuova, quindi puoi passare dall'una all'altra senza perdere niente.
 
 ## Passare i dati tra due telefoni
-**Dati → Mostra QR** sul primo, **Dati → Scansiona** sul secondo. La scansione va fatta dentro l'app, non con la fotocamera del telefono: su iPhone la fotocamera aprirebbe Safari, che ha una memoria separata dall'app installata.
+**Impostazioni → Mostra QR** sul primo, **Impostazioni → Scansiona QR** sul secondo. La scansione va fatta dentro l'app, non con la fotocamera del telefono: su iPhone la fotocamera aprirebbe Safari, che ha una memoria separata dall'app installata.
 
 Se lo stesso match lo scoutate in due (una per lato), alla fine unite i dati con il QR: gli attacchi già presenti non vengono duplicati.
 
@@ -49,7 +50,7 @@ Carica i file nuovi sopra i vecchi (**Add file → Upload files**, stessi nomi).
 Aggiorna tutti i telefoni che si scambiano dati. Le versioni vecchie leggono ancora i codici delle partite con sole avversarie, ma non quelli che contengono gli attacchi della tua squadra.
 
 ## Abitudine che ti salva la stagione
-A fine partita: **Dati → Salva la partita come testo** e mandati il messaggio su WhatsApp. È il salvataggio: se perdi o cambi telefono, incolli il messaggio e ritrovi tutto. Prima di cambiare telefono fai anche il **Backup completo**, che contiene la tua squadra.
+A fine partita: **Impostazioni → Salva come testo** e mandati il messaggio su WhatsApp. È il salvataggio: se perdi o cambi telefono, incolli il messaggio e ritrovi tutto. Prima di cambiare telefono fai anche il **Backup completo**, che contiene la tua squadra.
 
 ## Crediti
 Caratteri Archivo e Big Shoulders Display (licenza SIL Open Font License, testi in `fonts/`). Codici QR generati con [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (licenza MIT) e letti con [jsQR](https://github.com/cozmo/jsQR) (licenza Apache 2.0).
