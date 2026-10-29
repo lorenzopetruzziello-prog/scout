@@ -684,7 +684,7 @@ function qrSvg(text){
 let qrTimer=0;
 function showQR(title,code,meta){
   clearInterval(qrTimer);
-  openSheet(`<div class="sh-head"><h2 id="sheetTitle">${esc(title)}</h2>${closeBtn()}</div><div class="qrbox"><div class="qrframe" id="qrF"><p class="sub" style="text-align:center;padding-top:40%">Preparo il QR…</p></div><div class="qrdots" id="qrD"></div><p class="qrmeta" id="qrM">${esc(meta)}</p></div><p class="tiny">Sull’altro telefono apri Scout, vai in Dati e tocca “Scansiona QR”. Tieni lo schermo luminoso e fermo.</p>`,()=>clearInterval(qrTimer));
+  openSheet(`<div class="sh-head"><h2 id="sheetTitle">${esc(title)}</h2>${closeBtn()}</div><div class="qrbox"><div class="qrframe" id="qrF"><p class="sub" style="text-align:center;padding-top:40%">Preparo il QR…</p></div><div class="qrdots" id="qrD"></div><p class="qrmeta" id="qrM">${esc(meta)}</p></div><p class="tiny">Sull’altro telefono apri Scout e tocca “Scansiona QR” in Impostazioni (nella versione precedente è in Dati). Tieni lo schermo luminoso e fermo.</p>`,()=>clearInterval(qrTimer));
   loadLib('qr.js','qrcode').then(()=>{
     const frames=qrFrames(code), F=$('#qrF'); if(!F) return;
     let svgs;
@@ -854,8 +854,11 @@ const setsWithData=(m,min)=>[...new Set(m.ev.map(e=>e.s))].sort((a,b)=>a-b).filt
 
 /* ---------- fondo: colore di chi attacca ---------- */
 const GROUND_COL={L:'#123E78',N:'#B54E19',G:'#0F2A4D'};
+let wipeFin=null;
 function setGround(g,origin){
-  const app=$('#app'); if(app.dataset.ground===g) return;
+  const app=$('#app');
+  if(wipeFin) wipeFin();            // un cambio ancora in corso si chiude subito: il colore resta sempre quello giusto
+  if(app.dataset.ground===g) return;
   const tc=$('#themeColor'); if(tc) tc.setAttribute('content',GROUND_COL[g]);
   const gr=$('.ground');
   if(origin&&prefs.wipe&&!reduced&&document.body.animate){
@@ -865,9 +868,10 @@ function setGround(g,origin){
       w.style.backgroundImage=getComputedStyle($('.ground .g'+g)).backgroundImage;
       document.body.insertBefore(w,app);
       const a=w.animate([{clipPath:`circle(0px at ${x}px ${y}px)`},{clipPath:`circle(${r}px at ${x}px ${y}px)`}],{duration:520,easing:'cubic-bezier(.65,0,.35,1)'});
-      const done=()=>{ gr.classList.add('snap'); app.dataset.ground=g; requestAnimationFrame(()=>requestAnimationFrame(()=>{ w.remove(); gr.classList.remove('snap'); })); };
-      a.onfinish=done; a.oncancel=done;
-      setTimeout(()=>{ if(w.isConnected) done(); },900);
+      let fin=false;
+      const done=()=>{ if(fin) return; fin=true; if(wipeFin===done) wipeFin=null; gr.classList.add('snap'); app.dataset.ground=g; w.remove(); requestAnimationFrame(()=>requestAnimationFrame(()=>gr.classList.remove('snap'))); };
+      wipeFin=done; a.onfinish=done; a.oncancel=done;
+      setTimeout(done,900);
       return;
     }catch(e){}
   }
@@ -909,6 +913,30 @@ function tabDot(){
 window.addEventListener('resize',()=>{ moveInd(); moveSetPill(); });
 try{ if(document.fonts) document.fonts.ready.then(()=>{ moveInd(); moveSetPill(); }); }catch(e){}
 
+/* tasto indietro del telefono: prima chiude ciò che è aperto, poi torna allo scout */
+const nav={depth:0,busy:false,q:false};
+const sheetOpen=()=>$('#scrim').classList.contains('open');
+const presentOpen=()=>$('#present').classList.contains('open');
+const navWant=()=>(view!=='scout'?1:0)+(sheetOpen()||presentOpen()?1:0);
+function navSync(){ if(nav.q) return; nav.q=true; queueMicrotask(navApply); }
+function navApply(){
+  nav.q=false; if(nav.busy) return;
+  const w=navWant();
+  try{
+    while(nav.depth<w){ nav.depth++; history.pushState({scoutNav:nav.depth},''); }
+    if(nav.depth>w){ const d=nav.depth-w; nav.depth=w; nav.busy=true; history.go(-d); }
+  }catch(e){ nav.busy=false; }
+}
+window.addEventListener('popstate',e=>{
+  const lvl=(e.state&&e.state.scoutNav)||0;
+  if(nav.busy){ nav.busy=false; nav.depth=lvl; navApply(); return; }
+  if(lvl>=nav.depth){ nav.depth=lvl; navApply(); return; }   // avanti: rimetto le cose come sono
+  nav.depth=lvl;
+  for(let guard=0;navWant()>nav.depth&&guard<3;guard++){
+    if(presentOpen()) closeShow(); else if(sheetOpen()) closeSheet(); else if(view!=='scout') show('scout');
+  }
+});
+let installHint=false;
 function show(v,opts){
   if(!['scout','tips','team','settings'].includes(v)) v='scout';
   const changed=v!==view;
@@ -921,6 +949,18 @@ function show(v,opts){
   moveInd(); tabDot();
   setGround(groundFor(),opts&&opts.origin);
   renderView();
+  navSync();
+  if(installHint&&(v==='settings'||v==='team')) scheduleInstallHint(0);
+}
+// il suggerimento non copre mai un altro avviso (per esempio un “Rimetti”) e compare solo in Squadra o Impostazioni
+function scheduleInstallHint(tries){
+  setTimeout(()=>{
+    if(!installHint) return;
+    if(view!=='settings'&&view!=='team') return;
+    if($('#toast').classList.contains('is-on')||sheetOpen()){ if(tries<6) scheduleInstallHint(tries+1); return; }
+    installHint=false; try{ localStorage.setItem('scout-install-hint','1'); }catch(e){}
+    toast('Installala sulla schermata Home: così non perdi mai i dati.','Come',doInstall);
+  },tries?2500:900);
 }
 function renderView(){
   if(view==='scout') renderScout();
@@ -959,7 +999,7 @@ function setSide(s,origin){
   }
   renderScout();
 }
-$('#sideSw').addEventListener('click',e=>{ const b=e.target.closest('button[data-side]'); if(b) setSide(b.dataset.side,{x:e.clientX||0,y:e.clientY||0}); });
+$('#sideSw').addEventListener('click',e=>{ const b=e.target.closest('button[data-side]'); if(!b) return; const r=b.getBoundingClientRect(); setSide(b.dataset.side,e.clientX||e.clientY?{x:e.clientX,y:e.clientY}:{x:r.left+r.width/2,y:r.top+r.height/2}); });
 $('#sideSw').addEventListener('keydown',e=>{ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){ e.preventDefault(); setSide(side()==='L'?'N':'L'); const b=$(`#sideSw button[data-side="${side()}"]`); if(b) b.focus(); } });
 
 /* maglie */
@@ -1086,13 +1126,14 @@ function flyBall(btn,e){
     setTimeout(()=>{ if(el.isConnected) el.remove(); },1300);
   }catch(err){}
 }
-function setFlash(kind,ev,mid,pop){
-  flash={kind,ev,mid,until:Date.now()+6000};
+function setFlash(kind,ev,mid,pop,ms){
+  ms=ms||6000;
+  flash={kind,ev,mid,until:Date.now()+ms};
   renderDock();
   const st=$('#status');
   if(pop&&!reduced){ st.classList.remove('pop'); void st.offsetWidth; st.classList.add('pop'); }
   clearTimeout(flashT);
-  flashT=setTimeout(()=>{ if(view==='scout') renderDock(); },6050);
+  flashT=setTimeout(()=>{ if(view==='scout') renderDock(); },ms+50);
 }
 function insightLine(m){
   const s=side();
@@ -1113,7 +1154,10 @@ function renderDock(){
     act=`<button class="act clr" data-act="clear" aria-label="Azzera la scelta">${IC.x}</button>`;
   }else if(flash&&Date.now()<flash.until){
     const e=flash.ev;
-    if(flash.kind==='saved'){
+    if(flash.kind==='set'){
+      txt=`<span><b>${setName(e.s)}</b></span><span class="mut">I nuovi attacchi vanno qui</span>`;
+      tint='#FFFFFF';
+    }else if(flash.kind==='saved'){
       txt=`<span><span class="ok">${IC.check}</span><b>${esc(who(e.n,e.p))} ${esc(shotName(e.z,e.d))}</b></span><span class="mut">${esc(oLab(e.p,e.o))}, set ${e.s}</span>`;
       act=`<button class="act" data-act="undo">${IC.undo}<span>Annulla</span></button>`;
       tint=OUT[e.p][e.o].c;
@@ -1122,12 +1166,13 @@ function renderDock(){
       act='<button class="act" data-act="restore">Rimetti</button>';
     }
   }else{
-    const bs=briefPending(m);
-    if(bs==='tb'){ txt='<span><b>Tie-break</b></span><span class="mut">Le priorità sono pronte</span>'; act='<button class="act go" data-act="brief" data-b="tb">Apri</button>'; tint='var(--ball)'; }
-    else if(bs){ txt=`<span><b>Set ${bs} finito</b></span><span class="mut">Cosa dire alle giocatrici</span>`; act=`<button class="act go" data-act="brief" data-b="${bs}">Apri</button>`; tint='var(--ball)'; }
+    const bs=briefPending(m), mp=maxPlayed(m);
+    if(m.set<mp){ txt=`<span><b>Stai segnando ${setNameIn(m.set)}</b></span><span class="mut">${mp===5?'Il tie-break':'Il set '+mp} ha già attacchi</span>`; act=`<button class="act go" data-act="toset" data-s="${mp}">${mp===5?'Vai al tie-break':'Vai al set '+mp}</button>`; tint='var(--warn)'; }
+    else if(bs==='tb'){ txt='<span><b>Tie-break</b></span><span class="mut">Le priorità sono pronte</span>'; act='<button class="act go" data-act="brief" data-b="tb">Indicazioni</button>'; tint='var(--ball)'; }
+    else if(bs){ txt=`<span><b>Set ${bs} finito</b></span><span class="mut">Cosa dire alle giocatrici</span>`; act=`<button class="act go" data-act="brief" data-b="${bs}">Indicazioni</button>`; tint='var(--ball)'; }
     else txt=(cloud.state==='loading'&&!m.ev.length)?'<span class="mut">Recupero i dati dal tuo account…</span>':(insightLine(m)||'<span><b>Numero, colpo, esito</b></span><span class="mut">In qualsiasi ordine: si salva da solo</span>');
   }
-  const hist=m.ev.length&&!partial?`<button class="act hist" data-act="hist" aria-label="Cronologia, ${att(m.ev.length)}">${m.ev.length}</button>`:'';
+  const hist=m.ev.length&&!partial?`<button class="act hist" data-act="hist" aria-label="Cronologia, ${att(m.ev.length)}">${IC.list}<span>${m.ev.length}</span></button>`:'';
   st.innerHTML=`<div class="txt">${txt}</div>${act}${hist}`;
   st.classList.toggle('building',partial);
   st.style.setProperty('--tint',tint);
@@ -1146,7 +1191,7 @@ function renderFeed(){
 $('#feed').addEventListener('click',e=>{
   const b=e.target.closest('[data-fdel]'); if(!b) return;
   const m=cur(), ev=m.ev.find(x=>x.id===b.dataset.fdel); if(!ev) return;
-  if(removeEvent(m.id,ev.id)){ renderJerseys(); renderCourtState(); renderFeed(); setFlash('removed',ev,m.id,false); }
+  if(removeEvent(m.id,ev.id)){ renderJerseys(); renderCourtState(); renderFeed(); renderHeader(); setFlash('removed',ev,m.id,false); }
 });
 function clearSel(){ resetSel(); updateJerseySel(); renderCourtState(); renderDock(); }
 function undoLast(){
@@ -1166,6 +1211,7 @@ $('#status').addEventListener('click',e=>{
   else if(a==='undo'&&flash){ const f=flash; if(removeEvent(f.mid,f.ev.id)){ renderJerseys(); renderCourtState(); renderFeed(); renderHeader(); setFlash('removed',f.ev,f.mid,false); } }
   else if(a==='restore'&&flash){ const f=flash; if(restoreEvent(f.mid,f.ev)){ renderJerseys(f.ev.n); renderCourtState(); renderFeed(); renderHeader(); setFlash('saved',f.ev,f.mid,false); } }
   else if(a==='hist') openHistory();
+  else if(a==='toset') changeSet(+b.dataset.s,true);
   else if(a==='brief'){ const v=b.dataset.b; tipsUI={scope:v==='tb'?'tb':'set'+v,tab:'brief'}; const r=b.getBoundingClientRect(); show('tips',{origin:{x:r.left+r.width/2,y:r.top+r.height/2}}); }
 });
 
@@ -1185,15 +1231,15 @@ function typedNumber(k){
 }
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'){
-    if(!$('#show').hidden){ closeShow(); return; }
+    if(!$('#present').hidden){ closeShow(); return; }
     if(!$('#scrim').hidden){ closeSheet(); return; }
     if(view==='scout'&&(sel.n||sel.z||sel.o)) clearSel();
     return;
   }
-  if(!$('#show').hidden){ if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ e.preventDefault(); showStep(e.key==='ArrowRight'?1:-1); } return; }
+  if(!$('#present').hidden){ if(e.key==='ArrowRight'||e.key==='ArrowLeft'){ e.preventDefault(); showStep(e.key==='ArrowRight'?1:-1); } return; }
   if(!$('#scrim').hidden) return;
   const t=e.target; if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-  if(e.ctrlKey||e.metaKey||e.altKey||e.repeat){ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&e.key.toLowerCase()==='z'&&view==='scout'){ e.preventDefault(); undoLast(); } return; }
+  if(e.ctrlKey||e.metaKey||e.altKey||e.repeat){ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&!e.repeat&&e.key.toLowerCase()==='z'&&view==='scout'){ e.preventDefault(); undoLast(); } return; }
   const k=e.key, lk=k.toLowerCase();
   if(lk==='i'&&view==='scout'){ e.preventDefault(); show('tips'); return; }
   if(lk==='s'&&view!=='scout'){ e.preventDefault(); show('scout'); return; }
@@ -1233,7 +1279,7 @@ function scopeLabel(scope){
 function scopeOpts(){
   const m=cur(), o=setsWithData(m).map(s=>({k:'set'+s,l:'Set '+s}));
   o.push({k:'match',l:'Tutta la partita'});
-  if(sideEv(m.ev,'L').length>=8) o.push({k:'tb',l:'Tie-break'});
+  if(sideEv(m.ev,'L').length>=8&&(m.set>=4||setsWithData(m).length>=3)) o.push({k:'tb',l:'Tie-break'});
   const others=sameOpp(m); if(others.length) o.push({k:'opp',l:`Tutte contro ${m.opp.trim()} (${others.length+1})`});
   return o;
 }
@@ -1308,7 +1354,7 @@ function buildBrief(scope){
       if(Ao&&scope.indexOf('set')===0){ const q=Ao.players.find(x=>x.n===p.n), a=topShot(p), bb=q&&q.t>=3?topShot(q):null; if(a&&bb&&(a.z+a.d)!==(bb.z+bb.d)&&a.t/p.t>=.4&&bb.t/q.t>=.4) extra.push(`Ha cambiato colpo: ${plab} andava ${shotName(bb.z,bb.d)}.`); }
       if(tips>=2&&tips/p.t>=.25&&k.d!=='T') extra.push(`Occhio anche al pallonetto: ${tips} su ${p.t}.`);
       if(tr>=.2) extra.push('Sta segnando più di prima.');
-      const pc=pastConfirm(p.n,k.z,k.d); if(pc) extra.push(pc);
+      const pc=scope==='opp'?'':pastConfirm(p.n,k.z,k.d); if(pc) extra.push(pc);
       B.items.push({side:'def',kind:'threat',tag:'#'+p.n,head:cmdThreat(k.z,k.d,p.n),why:`Fa punto ${punchy(k.z,k.d)}: ${k.K} su ${k.t}`+(p.K>k.K?`, ${pts(p.K)} in tutto`:''),n:k.t,
         text:cap(defense(k.z,k.d))+'.'+(b?' Muro: '+b+'.':'')+(extra.length?' '+extra.join(' '):''),
         board:{att:'L',shots:[{z:k.z,d:k.d}],num:p.n,block:!!b,defend:true},score:p.K*(.6+p.kp)+(tr>=.2?2:0)+(pc?1:0)});
@@ -1519,7 +1565,7 @@ function briefHTML(scope){
   if(B.more.length) h+=`<div class="sec-h"><h2>Poi</h2><small>Tocca per aprire</small></div><div class="mores">${B.more.map(moreRow).join('')}</div>`;
   if(B.good.length) h+=`<div class="sec-h"><h2>Cosa va bene</h2></div><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul>`;
   h+=`<p class="on-tiny" style="margin:16px 2px 0">${esc(scopeLabel(scope))}. ${scope==='tb'?'Gli ultimi due set vengono confrontati con i precedenti. ':''}Sotto i 3 attacchi una giocatrice non entra nelle indicazioni.</p>`;
-  h+=`<div class="ind-acts"><button class="btn ball" data-show>${svgI('M3 6.5V3h3.5M9.5 3H13v3.5M13 9.5V13H9.5M6.5 13H3V9.5')}<span>Mostra alle giocatrici</span></button><button class="btn glass" data-send aria-label="Manda il testo">${IC.share}<span>Manda</span></button></div>`;
+  if(B.now.length||B.more.length||B.good.length||B.keys.length) h+=`<div class="ind-acts"><button class="btn ball" data-show>${svgI('M3 6.5V3h3.5M9.5 3H13v3.5M13 9.5V13H9.5M6.5 13H3V9.5')}<span>Mostra alle giocatrici</span></button><button class="btn glass" data-send aria-label="Manda il testo">${IC.share}<span>Manda</span></button></div>`;
   return h;
 }
 
@@ -1580,26 +1626,25 @@ function openShow(B){
   if(B.keys.length){ const k=B.keys[0]; pages.push(`<section class="page keyp" aria-label="La chiave"><p class="key-l">La chiave</p><h2>${esc(k.title)}</h2><p class="tx">${esc(k.text)}</p>${B.keys[1]?`<p class="tx dim"><b>${esc(B.keys[1].title)}.</b> ${esc(B.keys[1].text)}</p>`:''}</section>`); }
   items.forEach((x,i)=>pages.push(`<section class="page ${x.side}" aria-label="Indicazione ${i+1} di ${items.length}"><div class="rk"><b>${i+1}</b>${sideChip(x)}</div><h2>${esc(x.head)}</h2><p class="st">${esc(x.why)}</p><div class="bdw">${board(Object.assign({label:x.head},x.board))}</div><p class="tx">${esc(x.text)}</p></section>`));
   if(B.good.length) pages.push(`<section class="page" aria-label="Cosa va bene"><div class="rk"><b class="okb">${svgI('M3 8.5l3.2 3L13 4.5')}</b></div><h2>Cosa va bene</h2><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul></section>`);
-  const sh=$('#show');
-  sh.innerHTML=`<div class="show-top"><b>${esc(briefTitle(B.scope))}${m.opp.trim()?' vs '+esc(m.opp.trim()):''}</b><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div><div class="pages" id="pages">${pages.join('')}</div><div class="show-foot"><button class="iconbtn" data-sstep="-1" aria-label="Indietro">${svgI('M10 3.5L5.5 8l4.5 4.5')}</button><div class="pdots" id="pdots">${pages.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div><button class="iconbtn" data-sstep="1" aria-label="Avanti">${svgI('M6 3.5L10.5 8 6 12.5')}</button></div>`;
-  sh.hidden=false; void sh.offsetWidth; sh.classList.add('open');
+  const sh=$('#present');
+  sh.innerHTML=`<div class="pr-top"><b>${esc(briefTitle(B.scope))}${m.opp.trim()?' vs '+esc(m.opp.trim()):''}</b><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div><div class="pages" id="pages">${pages.join('')}</div><div class="pr-foot"><button class="iconbtn" data-sstep="-1" aria-label="Indietro">${svgI('M10 3.5L5.5 8l4.5 4.5')}</button><div class="pdots" id="pdots">${pages.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div><button class="iconbtn" data-sstep="1" aria-label="Avanti">${svgI('M6 3.5L10.5 8 6 12.5')}</button></div>`;
+  sh.hidden=false; void sh.offsetWidth; sh.classList.add('open'); $('#app').inert=true; navSync();
   showIdx=0;
   const pg=$('#pages');
   let raf=0;
   pg.addEventListener('scroll',()=>{ cancelAnimationFrame(raf); raf=requestAnimationFrame(()=>{ const i=Math.round(pg.scrollLeft/pg.clientWidth); if(i!==showIdx){ showIdx=i; $$('#pdots i').forEach((d,j)=>d.classList.toggle('on',j===i)); buzz(5); } }); },{passive:true});
-  try{ if(sh.requestFullscreen&&!isIOS()&&mq('(pointer: coarse)')) sh.requestFullscreen().catch(()=>{}); }catch(e){}
   try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l=>{ sh._wl=l; }).catch(()=>{}); }catch(e){}
   setTimeout(()=>{ const b=$('[data-sclose]',sh); if(b) b.focus({preventScroll:true}); },50);
 }
 function showStep(d){ const pg=$('#pages'); if(!pg) return; const n=pg.children.length; const i=Math.max(0,Math.min(n-1,showIdx+d)); pg.scrollTo({left:i*pg.clientWidth,behavior:reduced?'auto':'smooth'}); }
 function closeShow(){
-  const sh=$('#show'); if(sh.hidden) return;
-  sh.classList.remove('open');
-  try{ if(document.fullscreenElement) document.exitFullscreen().catch(()=>{}); }catch(e){}
+  const sh=$('#present'); if(sh.hidden) return;
+  sh.classList.remove('open'); if(!sheetOpen()) $('#app').inert=false; navSync();
   try{ if(sh._wl){ sh._wl.release(); sh._wl=null; } }catch(e){}
   setTimeout(()=>{ sh.hidden=true; sh.innerHTML=''; },reduced?0:260);
 }
-$('#show').addEventListener('click',e=>{ if(e.target.closest('[data-sclose]')) closeShow(); const s=e.target.closest('[data-sstep]'); if(s) showStep(+s.dataset.sstep); });
+window.addEventListener('resize',()=>{ const pg=$('#pages'); if(pg&&presentOpen()) pg.scrollLeft=showIdx*pg.clientWidth; });
+$('#present').addEventListener('click',e=>{ if(e.target.closest('[data-sclose]')) closeShow(); const s=e.target.closest('[data-sstep]'); if(s) showStep(+s.dataset.sstep); });
 
 /* =========================================================
    SQUADRA
@@ -1731,6 +1776,8 @@ function openBackup(){
    SET: chiaro e immediato
    ========================================================= */
 const setName=s=>s===5?'Tie-break':'Set '+s;
+const setNameIn=s=>s===5?'nel tie-break':'nel set '+s;
+const maxPlayed=m=>m.ev.reduce((a,e)=>Math.max(a,e.s),0);
 function setStats(m){ const c={1:0,2:0,3:0,4:0,5:0}; m.ev.forEach(e=>{ c[e.s]=(c[e.s]||0)+1; }); return c; }
 function renderSetControl(){
   const m=cur(), c=setStats(m);
@@ -1738,6 +1785,8 @@ function renderSetControl(){
   $('#setBtn').setAttribute('aria-label',`${setName(m.set)} in corso. Cambia set`);
   $('#setBar').innerHTML=[1,2,3,4,5].map(s=>`<i class="${s===m.set?'cur':c[s]?'done':''}"></i>`).join('');
   $$('#sets button').forEach(b=>{ const s=+b.dataset.set; b.setAttribute('aria-pressed',String(s===m.set)); const k=b.querySelector('small'); if(k) k.textContent=c[s]?c[s]+' att.':s===m.set?'ora':''; b.setAttribute('aria-label',setName(s)+(c[s]?', '+att(c[s]):'')+(s===m.set?', in corso':'')); });
+  const behind=m.set<maxPlayed(m);
+  $('#setBtn').classList.toggle('behind',behind); $('#sets').classList.toggle('behind',behind);
   moveSetPill();
 }
 function moveSetPill(){ const b=$('#sets button[aria-pressed="true"]'), p=$('#sets .pill'); if(b&&p&&b.offsetWidth){ p.style.width=b.offsetWidth+'px'; $('#sets').style.setProperty('--sx',(b.offsetLeft-4)+'px'); } }
@@ -1745,16 +1794,18 @@ function changeSet(s,announce){
   const m=cur(), prev=m.set; if(s===prev) return;
   m.set=s; save(); buzz(10);
   renderHeader();
-  if(view==='scout') renderDock(); else if(view==='tips'){ tipsUI.scope=null; renderTips(); }
-  if(announce){
-    const had=m.ev.filter(e=>e.s===prev).length;
-    if(s>prev&&had>=4) toast(`${setName(s)}: si parte.`,`Indicazioni ${setName(prev).toLowerCase()}`,()=>{ tipsUI={scope:'set'+prev,tab:'brief'}; show('tips'); });
-    else toast(`${setName(s)}: gli attacchi vanno qui.`);
+  const sb=$('#setBtn'); if(sb&&!reduced){ sb.classList.remove('pop'); void sb.offsetWidth; sb.classList.add('pop'); }
+  if(view==='scout'){ if(announce) setFlash('set',{s},m.id,true,2600); else renderDock(); }
+  else{
+    if(view==='tips'){ tipsUI.scope=null; renderTips(); }
+    if(announce) toast(`Ora segni ${setNameIn(s)}.`);
   }
 }
 function openSetSheet(){
-  const m=cur(), c=setStats(m), nx=m.set<5?m.set+1:null;
-  openSheet(`<div class="sh-head"><h2 id="sheetTitle">Che set si gioca?</h2>${closeBtn()}</div>${nx?`<button class="btn ball block" id="nextSet">${svgI('M6 3.5L10.5 8 6 12.5')}<span>Inizia ${nx===5?'il tie-break':'il set '+nx}</span></button>`:''}<div class="setgrid">${[1,2,3,4,5].map(s=>`<button class="settile${s===5?' tb':''}" data-set="${s}" aria-pressed="${s===m.set}"><b>${s===5?'TB':s}</b><span>${setName(s)}</span><small>${s===m.set?'in corso':c[s]?att(c[s]):'da giocare'}</small></button>`).join('')}</div><p class="tiny" style="margin-top:12px">Ogni attacco viene segnato nel set scelto. Puoi tornare a un set già giocato per aggiungere o correggere.</p>`);
+  const m=cur(), c=setStats(m), mp=maxPlayed(m);
+  const back=m.set<mp, nx=back?mp:(m.set<5?m.set+1:null);
+  const primary=nx?`<button class="btn ${back?'primary':'ball'} block" id="nextSet">${svgI(back?'M8 13V3M3.5 7.5L8 3l4.5 4.5':'M6 3.5L10.5 8 6 12.5')}<span>${back?'Torna '+setNameIn(nx).replace('nel ','al ').replace('nel tie-break','al tie-break'):'Inizia '+(nx===5?'il tie-break':'il set '+nx)}</span></button>`:'';
+  openSheet(`<div class="sh-head"><h2 id="sheetTitle">Che set si gioca?</h2>${closeBtn()}</div>${back?`<p class="setwarn">Stai segnando ${setNameIn(m.set)}, ma ci sono già attacchi ${setNameIn(mp)}.</p>`:''}${primary}<div class="setgrid">${[1,2,3,4,5].map(s=>`<button class="settile${s===5?' tb':''}" data-set="${s}" aria-pressed="${s===m.set}"><b>${s===5?'TB':s}</b><span>${setName(s)}</span><small>${s===m.set?'ora':c[s]?att(c[s]):'da giocare'}</small></button>`).join('')}</div><p class="tiny" style="margin-top:12px">Ogni attacco va nel set scelto. Puoi tornare a un set già giocato per aggiungere o correggere, poi torna al set in corso.</p>`);
   const nb=$('#nextSet'); if(nb) nb.onclick=()=>{ closeSheet(); changeSet(nx,true); };
   $('.setgrid').addEventListener('click',e=>{ const b=e.target.closest('[data-set]'); if(!b) return; const s=+b.dataset.set; closeSheet(); if(s!==m.set) changeSet(s,true); });
 }
@@ -1788,21 +1839,22 @@ function openSheet(html,onClose){
   sh.style.transform='';
   sheetOnClose=onClose||null;
   if(scrim.hidden){ lastFocus=document.activeElement; scrim.hidden=false; void scrim.offsetWidth; }
-  scrim.classList.add('open');
-  sh.scrollTop=0;
+  scrim.classList.add('open'); $('#app').inert=true;
+  sh.scrollTop=0; navSync();
   const af=sh.querySelector('[data-autofocus]');
   setTimeout(()=>{ try{ (af||sh).focus({preventScroll:true}); }catch(e){} },reduced?0:80);
 }
 function closeSheet(){
   const scrim=$('#scrim');
   if(scrim.hidden||!scrim.classList.contains('open')) return;
-  scrim.classList.remove('open');
+  scrim.classList.remove('open'); if(!presentOpen()) $('#app').inert=false;
   $('#sheet').style.transform='';
   const cb=sheetOnClose; sheetOnClose=null;
   clearTimeout(sheetTimer);
   sheetTimer=setTimeout(()=>{ scrim.hidden=true; $('#sheet').innerHTML=''; },reduced?0:300);
   if(cb) cb();
   if(lastFocus&&lastFocus.tagName==='BUTTON'&&document.contains(lastFocus)){ try{ lastFocus.focus({preventScroll:true}); }catch(e){} }
+  navSync();
 }
 $('#scrim').addEventListener('click',e=>{ if(e.target.id==='scrim') closeSheet(); });
 $('#sheet').addEventListener('click',e=>{ if(e.target.closest('[data-close]')) closeSheet(); });
@@ -1906,7 +1958,7 @@ function openMatches(){
     const m=db.matches[d.dataset.delm]; if(!m) return;
     const undo=()=>{ db.matches[m.id]=m; unmarkDeleted(m.id); save(); renderAll(); if(!$('#scrim').hidden) openMatches(); };
     if(!m.ev.length){ deleteMatch(m.id); openMatches(); toast('Partita eliminata.','Rimetti',undo); return; }
-    confirmSheet({title:'Eliminare la partita?',text:`${m.opp.trim()?'Contro '+m.opp.trim():'Senza nome'}, ${att(m.ev.length)}. Se ti serve ancora, fai prima il backup da Dati.`,ok:'Elimina',danger:true}).then(ok=>{
+    confirmSheet({title:'Eliminare la partita?',text:`${m.opp.trim()?'Contro '+m.opp.trim():'Senza nome'}, ${att(m.ev.length)}. Se ti serve ancora, fai prima il backup da Impostazioni.`,ok:'Elimina',danger:true}).then(ok=>{
       if(!ok){ openMatches(); return; }
       deleteMatch(m.id); openMatches();
       toast('Partita eliminata.','Rimetti',undo);
@@ -1949,11 +2001,13 @@ function toast(msg,actLabel,actFn){
   $('#toastMsg').textContent=msg;
   if(actLabel){ b.hidden=false; b.textContent=actLabel; b.onclick=()=>{ hideToast(); actFn(); }; }
   else{ b.hidden=true; b.onclick=null; }
-  if(!mq('(min-width:1024px)')){ const bar=$('.appbar').getBoundingClientRect(); t.style.top=Math.round(bar.bottom+8)+'px'; }
-  t.classList.add('show');
+  t.classList.toggle('top',view==='scout'&&!sheetOpen());
+  const ia=view==='tips'&&!sheetOpen()?$('#v-tips .ind-acts:not(.static)'):null;
+  t.classList.toggle('lift',!!(ia&&getComputedStyle(ia).position==='sticky'));
+  t.classList.add('is-on');
   clearTimeout(toastT); toastT=setTimeout(hideToast,actLabel?5200:3200);
 }
-function hideToast(){ $('#toast').classList.remove('show'); }
+function hideToast(){ $('#toast').classList.remove('is-on'); }
 
 /* ---------- avvio ---------- */
 applyPrefs();
@@ -1968,9 +2022,9 @@ if(GH){
   window.addEventListener('beforeinstallprompt',e=>{ e.preventDefault(); installEvt=e; if(view==='settings') renderSettings(); });
   window.addEventListener('appinstalled',()=>{ installEvt=null; if(view==='settings') renderSettings(); toast('App installata: da ora aprila dall’icona.'); });
   let hinted=false; try{ hinted=!!localStorage.getItem('scout-install-hint'); }catch(e){}
-  if(!isStandalone()&&!hinted&&mq('(pointer: coarse)')) setTimeout(()=>{ try{ localStorage.setItem('scout-install-hint','1'); }catch(e){} toast('Installala sulla schermata Home: così non perdi mai i dati.','Come',doInstall); },1800);
+  installHint=!isStandalone()&&!hinted&&mq('(pointer: coarse)');
 }
-initCloud().finally(()=>{ if(!storageOK&&cloud.state!=='on') toast('Qui i dati non vengono salvati: prima di chiudere copia il backup da Dati.'); });
+initCloud().finally(()=>{ if(!storageOK&&cloud.state!=='on') toast('Qui i dati non vengono salvati: prima di chiudere copia il backup da Impostazioni.'); });
 
 // solo per i test automatici
 if(/[?&]scouttest=1/.test(location.search)) window.__scout={get db(){ return db; },encode,decode,parseCode,mergeInto,mergeTeam,cleanTeam,qids,heat,landing,doImport,qrFrames,buildBrief,briefText,reload:()=>{ db=load(); renderAll(); }};

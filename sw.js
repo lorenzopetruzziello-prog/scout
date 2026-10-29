@@ -1,5 +1,5 @@
 /* Scout: funziona anche senza rete. Cambia CACHE a ogni versione per far arrivare l'aggiornamento. */
-const CACHE = 'scout-v6';
+const CACHE = 'scout-v7';
 const CORE = ['./', './index.html', './style.css', './app.js', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png', './qr.js', './jsqr.js', './fonts/archivo.woff', './fonts/big-shoulders.woff'];
 
 self.addEventListener('install', e => {
