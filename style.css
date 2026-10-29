@@ -63,6 +63,11 @@ h1,h2,h3,p{margin:0}
 .matchbtn .i{color:var(--on-3);width:16px;height:16px;transition:transform .2s}
 .matchbtn:active .i{transform:translateY(2px)}
 
+/* time-out: sempre a un tocco */
+.tobtn{flex:none;display:flex;align-items:center;justify-content:center;gap:7px;height:54px;padding:0 14px;border-radius:15px;background:var(--ball);color:var(--ball-ink);font-weight:800;font-size:15px;box-shadow:0 8px 18px -10px rgba(0,0,0,.6);transition:transform .12s var(--out)}
+.tobtn .i{width:20px;height:20px;stroke-width:2.1}
+.tobtn:active{transform:scale(.96)}
+@media (max-width:370px){.tobtn{padding:0 10px;gap:5px;font-size:14px}.tobtn .i{display:none}}
 /* set: un tasto chiaro su telefono, la sequenza intera su tablet e PC */
 .setbtn{flex:none;display:flex;flex-direction:column;align-items:stretch;justify-content:center;gap:5px;height:54px;min-width:78px;padding:0 12px;border-radius:15px;background:var(--well);box-shadow:inset 0 0 0 1px rgba(255,255,255,.1);transition:transform .12s var(--out)}
 .setbtn:active{transform:scale(.96)}
@@ -271,7 +276,7 @@ kbd{display:inline-block;min-width:20px;padding:0 5px;border-radius:6px;backgrou
   .court{row-gap:5px}
 }
 @media (max-height:680px){
-  .tabs button,.tabs .ind{height:36px}.bar-row{min-height:46px}.matchbtn .mn{font-size:23px}.setbtn{height:46px}
+  .tabs button,.tabs .ind{height:36px}.bar-row{min-height:46px}.matchbtn .mn{font-size:23px}.setbtn,.tobtn{height:46px}
   .jersey{height:46px}.jersey .jn{font-size:25px}.jersey .nm{display:none}.jerseys.named .jersey{height:46px}
   .out{height:60px}.out small{display:none}.sideswitch button{height:40px}.status{min-height:44px}.step{height:36px}
   .court{grid-template-rows:auto repeat(3,minmax(36px,1fr)) auto auto minmax(38px,1fr);padding-top:6px;row-gap:5px}
@@ -438,6 +443,71 @@ td small{margin-left:4px;font-size:12px;color:var(--muted)}
 .pdots i{width:9px;height:9px;border-radius:5px;background:rgba(255,255,255,.3);transition:width .3s var(--spring),background-color .2s}
 .pdots i.on{width:26px;background:var(--ball)}
 
+/* ---------- TIME-OUT ---------- */
+.present.to{background:radial-gradient(140% 70% at 50% 15%,#1B3B66,var(--G3))}
+.to-top{align-items:flex-start}
+.to-top>div{min-width:0}
+.to-top b{display:block;font:900 34px/1 var(--disp)}
+.to-top small{display:block;margin-top:5px;font-size:13.5px;line-height:1.4;color:var(--on-2)}
+.to-bar{height:5px;margin:4px 18px 0;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden}
+.to-bar i{display:block;height:100%;border-radius:3px;background:var(--ball);transform-origin:left;animation:toBar 30s linear forwards}
+@keyframes toBar{to{transform:scaleX(0)}}
+.to-wrap{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:14px 18px 10px;display:flex;flex-direction:column;gap:12px}
+.to-key{padding:2px 2px 4px}
+.to-key h2{font:900 clamp(27px,7.4vw,44px)/1 var(--disp);letter-spacing:.005em;max-width:22ch}
+.to-key p{margin-top:6px;font-size:15px;line-height:1.4;color:var(--on-2);max-width:60ch}
+.to-list{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.to-item{display:grid;grid-template-columns:auto minmax(0,1fr) 112px;gap:12px;align-items:center;padding:12px 12px 12px 10px;border-radius:20px;background:var(--paper);color:var(--ink)}
+.to-item .n{align-self:start;font:900 44px/.8 var(--disp);color:var(--L2);min-width:24px;text-align:center}
+.to-item.att .n{color:var(--N2)}
+.to-item h3{font:800 clamp(21px,5.8vw,30px)/1.02 var(--disp);letter-spacing:.005em}
+.to-item .tx{margin-top:5px;font-size:14.5px;line-height:1.38;color:var(--ink-2)}
+.to-item .why{margin-top:4px;font-size:12.5px;font-weight:650;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.to-item .board{width:112px;border-radius:10px}
+.to-good{display:flex;gap:10px;align-items:flex-start;padding:12px 14px;border-radius:16px;background:rgba(61,220,151,.13);box-shadow:inset 0 0 0 1px rgba(61,220,151,.35);font-size:14.5px;line-height:1.4}
+.to-good .ck{flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#3DDC97;color:var(--G3)}
+.to-good .ck .i{width:14px;height:14px;stroke-width:2.8}
+.to-note{font-size:14.5px;color:var(--on-2);line-height:1.4}
+.to-empty{margin:auto 0;text-align:center}
+.to-empty h2{font:900 36px/1 var(--disp)}
+.to-empty p{margin:10px auto 0;max-width:34ch;color:var(--on-2)}
+.to-foot{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;padding:8px 18px calc(14px + var(--safe-b))}
+.to-foot .btn{min-height:56px}
+.to-foot .btn:only-child{grid-column:1/-1}
+@media (min-width:760px){
+  .to-top,.to-wrap,.to-foot{padding-left:max(28px,5vw);padding-right:max(28px,5vw)}
+  .to-bar{margin-left:max(28px,5vw);margin-right:max(28px,5vw)}
+  .to-list{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+  .to-item{grid-template-columns:auto minmax(0,1fr);align-items:start}
+  .to-item .bd{grid-column:1/-1}
+  .to-item .board{width:100%;max-width:320px;margin:0 auto}
+  .to-foot{max-width:640px;width:100%;margin:0 auto}
+}
+/* telefoni piccoli: tutto in una schermata, istruzioni sempre intere */
+@media (max-width:759px) and (max-height:780px){
+  .to-top b{font-size:28px}.to-top small{font-size:12.5px;margin-top:3px}
+  .to-wrap{padding-top:10px;gap:8px}
+  .to-key h2{font-size:25px}.to-key p{font-size:13.5px;margin-top:4px}
+  .to-item{grid-template-columns:auto minmax(0,1fr) 92px;gap:10px;padding:10px 10px 10px 8px;border-radius:18px}
+  .to-item .n{font-size:36px}.to-item h3{font-size:20px}.to-item .tx{font-size:13.5px;margin-top:3px}.to-item .why{font-size:12px;margin-top:2px}
+  .to-item .board{width:92px}
+  .to-good{padding:9px 12px;font-size:13.5px}
+  .to-foot{padding-top:6px}.to-foot .btn{min-height:50px}
+}
+/* telefono in orizzontale: tre colonne, senza disegni */
+@media (orientation:landscape) and (max-height:540px){
+  .to-top{padding-top:calc(var(--safe-t) + 6px)}
+  .to-top b{font-size:24px}.to-top small{font-size:12px;margin-top:2px}
+  .to-bar{margin-top:2px}
+  .to-wrap{padding-top:8px;gap:8px}
+  .to-key h2{font-size:22px}.to-key p{font-size:13px;margin-top:3px}
+  .to-list{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .to-item{grid-template-columns:auto minmax(0,1fr);align-items:start;padding:10px 10px 10px 8px;gap:8px;border-radius:16px}.to-item .bd{display:none}
+  .to-item .n{font-size:30px}.to-item h3{font-size:18px}.to-item .tx{font-size:12.5px}.to-item .why{font-size:11.5px}
+  .to-good{padding:7px 12px;font-size:12.5px}
+  .to-foot{padding-top:4px;padding-bottom:calc(8px + var(--safe-b))}.to-foot .btn{min-height:42px}
+}
+
 /* ---------- SQUADRA ---------- */
 .stack{display:grid;gap:12px;max-width:860px}
 @container main (min-width:1100px){.stack{grid-template-columns:minmax(0,380px) minmax(0,1fr);max-width:1200px;align-items:start}}
@@ -597,10 +667,11 @@ textarea.paste:focus{outline:none;border-color:var(--court-line);background:#fff
 }
 /* tablet in orizzontale e computer: tre colonne, niente da scorrere */
 @media (min-width:900px) and (orientation:landscape) and (min-height:541px),(min-width:1200px) and (min-height:541px){
-  .appbar{display:grid;grid-template-columns:minmax(180px,1fr) minmax(0,560px) auto;align-items:center;column-gap:16px;padding-bottom:10px}
+  .appbar{display:grid;grid-template-columns:minmax(160px,1fr) minmax(0,540px) auto auto;align-items:center;column-gap:14px;padding-bottom:10px}
+  .tobtn{grid-column:3;grid-row:1;height:50px}
   .bar-row{display:contents}
   .matchbtn{grid-column:1;grid-row:1}
-  .sets{grid-column:3;grid-row:1;justify-self:end}
+  .sets{grid-column:4;grid-row:1;justify-self:end}
   .tabs{grid-column:2;grid-row:1;margin:0;padding:0}
   .view.scout{height:100%;padding-bottom:calc(18px + var(--safe-b))}
   .scout{display:grid;grid-template-columns:minmax(250px,23%) minmax(0,1fr) minmax(290px,25%);grid-template-rows:auto minmax(0,1fr);grid-template-areas:"side court dock" "who court dock";column-gap:18px;row-gap:12px;min-height:0}
@@ -643,11 +714,12 @@ textarea.paste:focus{outline:none;border-color:var(--court-line);background:#fff
 /* telefono in orizzontale: tre colonne compatte, intestazione su una riga, niente da scorrere */
 @media (orientation:landscape) and (max-height:540px){
   :root{--gut:max(14px,env(safe-area-inset-left,0px))}
-  .appbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;column-gap:12px;padding-top:calc(var(--safe-t) + 4px);padding-bottom:6px}
+  .appbar{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:10px;padding-top:calc(var(--safe-t) + 4px);padding-bottom:6px}
+  .tobtn{grid-column:3;grid-row:1;height:44px;padding:0 12px}
   .bar-row{display:contents}
   .matchbtn{grid-column:1;grid-row:1;max-width:230px}.matchbtn .mn{font-size:22px}.matchbtn .mk{font-size:11.5px}
   .tabs{grid-column:2;grid-row:1;margin:0;padding:0}.tabs button,.tabs .ind{height:38px}.tabs button{font-size:14px}
-  .setbtn{display:flex;grid-column:3;grid-row:1;height:44px;min-width:70px}.sets{display:none}
+  .setbtn{display:flex;grid-column:4;grid-row:1;height:44px;min-width:70px}.sets{display:none}
   .sb-t b{font-size:25px}
   .view{padding-top:2px}
   .view.scout{height:100%;padding-bottom:calc(8px + var(--safe-b))}

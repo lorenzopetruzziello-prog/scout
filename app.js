@@ -437,7 +437,6 @@ function hole(H){ return CELLS.map(c=>H[c]).filter(h=>h.t>=3&&h.K>0).sort((a,b)=
 
 function briefPending(m){
   if(m.ev.some(e=>e.s===m.set)) return null;
-  if(m.set===5&&sideEv(m.ev,'L').length>=8) return 'tb';
   const prev=m.ev.filter(e=>e.s<m.set).reduce((a,e)=>Math.max(a,e.s),0);
   return prev&&m.ev.filter(e=>e.s===prev).length>=4?prev:null;
 }
@@ -972,6 +971,7 @@ function renderAll(){ renderHeader(); renderView(); }
 
 $('#sets').addEventListener('click',e=>{ const b=e.target.closest('button[data-set]'); if(b) changeSet(+b.dataset.set,true); });
 $('#setBtn').addEventListener('click',openSetSheet);
+$('#toBtn').addEventListener('click',openTimeout);
 $('#matchBtn').addEventListener('click',()=>openMatches());
 $('.tabs').addEventListener('click',e=>{ const b=e.target.closest('button[data-v]'); if(!b) return; const r=b.getBoundingClientRect(); show(b.dataset.v,{origin:{x:r.left+r.width/2,y:r.top+r.height/2}}); });
 $('.tabs').addEventListener('keydown',e=>{
@@ -1241,6 +1241,7 @@ document.addEventListener('keydown',e=>{
   const t=e.target; if(t&&(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
   if(e.ctrlKey||e.metaKey||e.altKey||e.repeat){ if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&!e.altKey&&!e.repeat&&e.key.toLowerCase()==='z'&&view==='scout'){ e.preventDefault(); undoLast(); } return; }
   const k=e.key, lk=k.toLowerCase();
+  if(lk==='t'){ e.preventDefault(); openTimeout(); return; }
   if(lk==='i'&&view==='scout'){ e.preventDefault(); show('tips'); return; }
   if(lk==='s'&&view!=='scout'){ e.preventDefault(); show('scout'); return; }
   if(view!=='scout') return;
@@ -1266,26 +1267,29 @@ function fEvents(scope){
   const f=scope||filter, m=cur();
   if(f==='opp') return [m].concat(sameOpp(m)).flatMap(x=>x.ev);
   if(f.indexOf('set')===0){ const s=+f.slice(3); return m.ev.filter(e=>e.s===s); }
+  if(f==='to'){ const s=m.set, cs=m.ev.filter(e=>e.s===s); return toCurrentOnly(m)?cs:m.ev.filter(e=>e.s===s||e.s===toPrev(m)); }
   return m.ev;
 }
+// a time-out bastano 6 attacchi del set in corso; prima di allora si aggiunge il set precedente
+const toPrev=m=>m.ev.filter(e=>e.s<m.set).reduce((a,e)=>Math.max(a,e.s),0);
+const toCurrentOnly=m=>m.ev.filter(e=>e.s===m.set).length>=6||!toPrev(m);
 const sideEv=(evs,s)=>evs.filter(e=>e.p===s);
 function scopeLabel(scope){
   const f=scope||filter, m=cur();
   if(f==='opp') return 'Tutte le partite contro '+m.opp.trim();
   if(f==='tb') return 'Tie-break, tutta la partita del '+fmtDate(m.date);
+  if(f==='to') return toCurrentOnly(m)?setName(m.set)+' in corso':setName(toPrev(m))+' e inizio '+setName(m.set).toLowerCase();
   if(f.indexOf('set')===0) return 'Set '+f.slice(3)+', partita del '+fmtDate(m.date);
   return 'Partita del '+fmtDate(m.date);
 }
 function scopeOpts(){
   const m=cur(), o=setsWithData(m).map(s=>({k:'set'+s,l:'Set '+s}));
   o.push({k:'match',l:'Tutta la partita'});
-  if(sideEv(m.ev,'L').length>=8&&(m.set>=4||setsWithData(m).length>=3)) o.push({k:'tb',l:'Tie-break'});
   const others=sameOpp(m); if(others.length) o.push({k:'opp',l:`Tutte contro ${m.opp.trim()} (${others.length+1})`});
   return o;
 }
 function autoScope(){
   const m=cur();
-  if(m.set===5&&sideEv(m.ev,'L').length>=8) return 'tb';
   if(m.ev.filter(e=>e.s===m.set).length>=4) return 'set'+m.set;
   const prev=setsWithData(m).filter(s=>s<m.set).pop();
   return prev?'set'+prev:'match';
@@ -1332,8 +1336,9 @@ function buildBrief(scope){
   const B={scope,L,N,tL:totals(L),tN:totals(N),items:[],good:[],keys:[]};
   // confronto: il set prima, oppure (tie-break) gli ultimi due set contro i precedenti
   let rL=null, oL=null, rN=null, oN=null, plab='';
-  if(scope.indexOf('set')===0){
-    const s=+scope.slice(3), prev=setsWithData(m).filter(x=>x<s).pop();
+  const sNum=scope.indexOf('set')===0?+scope.slice(3):(scope==='to'&&toCurrentOnly(m)?m.set:0);
+  if(sNum){
+    const s=sNum, prev=setsWithData(m).filter(x=>x<s).pop();
     if(prev){ const pe=m.ev.filter(e=>e.s===prev); rL=L; oL=sideEv(pe,'L'); rN=N; oN=sideEv(pe,'N'); plab='nel set '+prev; }
   }else if(scope==='tb'){
     const sets=[...new Set(evs.map(e=>e.s))].sort((a,b)=>a-b);
@@ -1351,11 +1356,11 @@ function buildBrief(scope){
       const k=topKill(p); if(!k) return;
       const tr=trend(p.n), b=blockTip(k.z,k.d), tips=tipCount(p), extra=[];
       covered.add(k.z+k.d); used.add(p.n);
-      if(Ao&&scope.indexOf('set')===0){ const q=Ao.players.find(x=>x.n===p.n), a=topShot(p), bb=q&&q.t>=3?topShot(q):null; if(a&&bb&&(a.z+a.d)!==(bb.z+bb.d)&&a.t/p.t>=.4&&bb.t/q.t>=.4) extra.push(`Ha cambiato colpo: ${plab} andava ${shotName(bb.z,bb.d)}.`); }
+      if(Ao&&sNum){ const q=Ao.players.find(x=>x.n===p.n), a=topShot(p), bb=q&&q.t>=3?topShot(q):null; if(a&&bb&&(a.z+a.d)!==(bb.z+bb.d)&&a.t/p.t>=.4&&bb.t/q.t>=.4) extra.push(`Ha cambiato colpo: ${plab} andava ${shotName(bb.z,bb.d)}.`); }
       if(tips>=2&&tips/p.t>=.25&&k.d!=='T') extra.push(`Occhio anche al pallonetto: ${tips} su ${p.t}.`);
       if(tr>=.2) extra.push('Sta segnando più di prima.');
       const pc=scope==='opp'?'':pastConfirm(p.n,k.z,k.d); if(pc) extra.push(pc);
-      B.items.push({side:'def',kind:'threat',tag:'#'+p.n,head:cmdThreat(k.z,k.d,p.n),why:`Fa punto ${punchy(k.z,k.d)}: ${k.K} su ${k.t}`+(p.K>k.K?`, ${pts(p.K)} in tutto`:''),n:k.t,
+      B.items.push({side:'def',kind:'threat',tag:'#'+p.n,head:cmdThreat(k.z,k.d,p.n),why:`${pts(k.K)} su ${k.t} ${punchy(k.z,k.d)}`+(p.K>k.K?`, ${p.K} in tutto`:''),n:k.t,
         text:cap(defense(k.z,k.d))+'.'+(b?' Muro: '+b+'.':'')+(extra.length?' '+extra.join(' '):''),
         board:{att:'L',shots:[{z:k.z,d:k.d}],num:p.n,block:!!b,defend:true},score:p.K*(.6+p.kp)+(tr>=.2?2:0)+(pc?1:0)});
     });
@@ -1455,7 +1460,7 @@ function keyInsights(B){
   out.sort((a,b)=>b.s-a.s);
   return out.slice(0,2);
 }
-function briefTitle(scope){ return scope==='tb'?'Tie-break':scope.indexOf('set')===0?'Set '+scope.slice(3):scope==='opp'?'Tutte le partite':'Partita'; }
+function briefTitle(scope){ return scope==='to'?'Time-out':scope==='tb'?'Tie-break':scope.indexOf('set')===0?'Set '+scope.slice(3):scope==='opp'?'Tutte le partite':'Partita'; }
 function briefText(B){
   const m=cur(), out=[];
   out.push(`*${briefTitle(B.scope)}${m.opp.trim()?' vs '+m.opp.trim():''}: cosa fare*`);
@@ -1626,7 +1631,7 @@ function openShow(B){
   if(B.keys.length){ const k=B.keys[0]; pages.push(`<section class="page keyp" aria-label="La chiave"><p class="key-l">La chiave</p><h2>${esc(k.title)}</h2><p class="tx">${esc(k.text)}</p>${B.keys[1]?`<p class="tx dim"><b>${esc(B.keys[1].title)}.</b> ${esc(B.keys[1].text)}</p>`:''}</section>`); }
   items.forEach((x,i)=>pages.push(`<section class="page ${x.side}" aria-label="Indicazione ${i+1} di ${items.length}"><div class="rk"><b>${i+1}</b>${sideChip(x)}</div><h2>${esc(x.head)}</h2><p class="st">${esc(x.why)}</p><div class="bdw">${board(Object.assign({label:x.head},x.board))}</div><p class="tx">${esc(x.text)}</p></section>`));
   if(B.good.length) pages.push(`<section class="page" aria-label="Cosa va bene"><div class="rk"><b class="okb">${svgI('M3 8.5l3.2 3L13 4.5')}</b></div><h2>Cosa va bene</h2><ul class="goods">${B.good.map(g=>`<li><span class="ck">${IC.check}</span><div><b>${esc(g.head)}</b><p>${esc(g.text)}</p></div></li>`).join('')}</ul></section>`);
-  const sh=$('#present');
+  const sh=$('#present'); sh.classList.remove('to');
   sh.innerHTML=`<div class="pr-top"><b>${esc(briefTitle(B.scope))}${m.opp.trim()?' vs '+esc(m.opp.trim()):''}</b><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div><div class="pages" id="pages">${pages.join('')}</div><div class="pr-foot"><button class="iconbtn" data-sstep="-1" aria-label="Indietro">${svgI('M10 3.5L5.5 8l4.5 4.5')}</button><div class="pdots" id="pdots">${pages.map((_,i)=>`<i class="${i?'':'on'}"></i>`).join('')}</div><button class="iconbtn" data-sstep="1" aria-label="Avanti">${svgI('M6 3.5L10.5 8 6 12.5')}</button></div>`;
   sh.hidden=false; void sh.offsetWidth; sh.classList.add('open'); $('#app').inert=true; navSync();
   showIdx=0;
@@ -1636,15 +1641,39 @@ function openShow(B){
   try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l=>{ sh._wl=l; }).catch(()=>{}); }catch(e){}
   setTimeout(()=>{ const b=$('[data-sclose]',sh); if(b) b.focus({preventScroll:true}); },50);
 }
+/* TIME-OUT: una schermata, tre cose, trenta secondi */
+function openTimeout(){
+  const m=cur();
+  let B=buildBrief('to'), note='';
+  if(B.L.length<4&&B.N.length<4){ const B2=buildBrief('match'); if(B2.L.length>=4||B2.N.length>=4){ B=B2; note='Pochi attacchi in questo set: guardo tutta la partita.'; } }
+  const enough=B.L.length>=4||B.N.length>=4;
+  const items=B.now.slice(0,3), good=B.good[0], key=B.keys[0];
+  const nums=[]; if(B.L.length) nums.push(`${esc(oppLabel(m))} ${B.tL.K} su ${B.L.length} a punto (${pct(B.tL.K/B.L.length)})`); if(B.N.length) nums.push(`${esc(teamLabel())} ${B.tN.K} su ${B.N.length} (${pct(B.tN.K/B.N.length)})`);
+  const sub=B.scope==='to'?scopeLabel('to'):'Tutta la partita';
+  let body='';
+  if(!enough) body=`<div class="to-empty"><h2>Ancora pochi dati</h2><p>Servono almeno 4 attacchi segnati per dire qualcosa di utile. Ora ne hai ${m.ev.length}.</p></div>`;
+  else{
+    if(note) body+=`<p class="to-note">${esc(note)}</p>`;
+    if(key) body+=`<section class="to-key ${key.side}"><h2>${esc(key.title)}</h2><p>${esc(key.text)}</p></section>`;
+    body+=items.length?`<ol class="to-list">${items.map((x,i)=>`<li class="to-item ${x.side}"><span class="n" aria-hidden="true">${i+1}</span><div class="tt"><h3>${esc(x.head)}</h3><p class="tx">${esc(x.text)}</p><p class="why">${esc(x.why)}</p></div><div class="bd">${board(Object.assign({label:x.head},x.board))}</div></li>`).join('')}</ol>`:`<p class="to-note">Niente di netto: nessuna giocatrice o colpo fa la differenza con regolarità. Palla in gioco e pazienza.</p>`;
+    if(good) body+=`<p class="to-good"><span class="ck">${IC.check}</span><span><b>${esc(good.head)}.</b> ${esc(good.text)}</span></p>`;
+  }
+  const sh=$('#present');
+  sh.innerHTML=`<div class="pr-top to-top"><div><b>Time-out</b><small>${esc(sub)}${nums.length?'<br>'+nums.join(', '):''}</small></div><button class="iconbtn" data-sclose aria-label="Chiudi">${IC.x}</button></div>${reduced?'':'<div class="to-bar" aria-hidden="true"><i></i></div>'}<div class="to-wrap">${body}</div><div class="to-foot">${enough?'<button class="btn glass" data-todetail>Tutte le indicazioni</button>':''}<button class="btn ball" data-sclose>Si riprende</button></div>`;
+  sh.classList.add('to');
+  sh.hidden=false; void sh.offsetWidth; sh.classList.add('open'); $('#app').inert=true; navSync(); buzz(10);
+  try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(l=>{ sh._wl=l; }).catch(()=>{}); }catch(e){}
+  setTimeout(()=>{ const b=$('.to-foot [data-sclose]',sh); if(b) b.focus({preventScroll:true}); },60);
+}
 function showStep(d){ const pg=$('#pages'); if(!pg) return; const n=pg.children.length; const i=Math.max(0,Math.min(n-1,showIdx+d)); pg.scrollTo({left:i*pg.clientWidth,behavior:reduced?'auto':'smooth'}); }
 function closeShow(){
   const sh=$('#present'); if(sh.hidden) return;
   sh.classList.remove('open'); if(!sheetOpen()) $('#app').inert=false; navSync();
   try{ if(sh._wl){ sh._wl.release(); sh._wl=null; } }catch(e){}
-  setTimeout(()=>{ sh.hidden=true; sh.innerHTML=''; },reduced?0:260);
+  setTimeout(()=>{ if(sh.classList.contains('open')) return; sh.hidden=true; sh.innerHTML=''; sh.classList.remove('to'); },reduced?0:260);
 }
 window.addEventListener('resize',()=>{ const pg=$('#pages'); if(pg&&presentOpen()) pg.scrollLeft=showIdx*pg.clientWidth; });
-$('#present').addEventListener('click',e=>{ if(e.target.closest('[data-sclose]')) closeShow(); const s=e.target.closest('[data-sstep]'); if(s) showStep(+s.dataset.sstep); });
+$('#present').addEventListener('click',e=>{ if(e.target.closest('[data-todetail]')){ closeShow(); tipsUI={scope:null,tab:'brief'}; show('tips'); return; } if(e.target.closest('[data-sclose]')) closeShow(); const s=e.target.closest('[data-sstep]'); if(s) showStep(+s.dataset.sstep); });
 
 /* =========================================================
    SQUADRA
@@ -1890,6 +1919,7 @@ function openShortcuts(){
 <li><b><kbd>L</kbd> <kbd>N</kbd></b>Attaccano loro, attacchiamo noi</li>
 <li><b><kbd>Esc</kbd></b>Azzera la scelta in corso</li>
 <li><b><kbd>Ctrl</kbd>+<kbd>Z</kbd></b>Annulla l’ultimo attacco</li>
+<li><b><kbd>T</kbd></b>Time-out: cosa dire adesso</li>
 <li><b><kbd>+</kbd></b>Inizia il set successivo</li>
 <li><b><kbd>I</kbd> <kbd>S</kbd></b>Indicazioni, torna allo scout</li></ul>`);
 }
