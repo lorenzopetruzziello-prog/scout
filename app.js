@@ -1986,12 +1986,11 @@ function openMatches(){
     if(o){ db.cur=o.dataset.open; resetTipsUI(); resetSel(); flash=null; save(); closeSheet(); renderAll(); return; }
     if(!d) return;
     const m=db.matches[d.dataset.delm]; if(!m) return;
-    const undo=()=>{ db.matches[m.id]=m; unmarkDeleted(m.id); save(); renderAll(); if(!$('#scrim').hidden) openMatches(); };
-    if(!m.ev.length){ deleteMatch(m.id); openMatches(); toast('Partita eliminata.','Rimetti',undo); return; }
-    confirmSheet({title:'Eliminare la partita?',text:`${m.opp.trim()?'Contro '+m.opp.trim():'Senza nome'}, ${att(m.ev.length)}. Se ti serve ancora, fai prima il backup da Impostazioni.`,ok:'Elimina',danger:true}).then(ok=>{
+    const desc=`${m.opp.trim()?'Contro '+m.opp.trim():'Partita senza nome'}, ${fmtDate(m.date)}, ${att(m.ev.length)}.`;
+    confirmSheet({title:'Sei sicuro di voler cancellare la partita?',text:desc+' La cancellazione è definitiva: non si potrà recuperare. Se ti serve ancora, fai prima il backup da Impostazioni.',ok:'Cancella definitivamente',danger:true}).then(ok=>{
       if(!ok){ openMatches(); return; }
-      deleteMatch(m.id); openMatches();
-      toast('Partita eliminata.','Rimetti',undo);
+      deleteMatch(m.id); openMatches(); buzz(20);
+      toast('Partita cancellata.');
     });
   });
 }
