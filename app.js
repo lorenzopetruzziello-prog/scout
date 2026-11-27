@@ -1280,11 +1280,11 @@ function scopeLabel(scope){
   if(f==='opp') return 'Tutte le partite contro '+m.opp.trim();
   if(f==='tb') return 'Tie-break, tutta la partita del '+fmtDate(m.date);
   if(f==='to') return toCurrentOnly(m)?setName(m.set)+' in corso':setName(toPrev(m))+' e inizio '+setName(m.set).toLowerCase();
-  if(f.indexOf('set')===0) return 'Set '+f.slice(3)+', partita del '+fmtDate(m.date);
+  if(f.indexOf('set')===0) return setName(+f.slice(3))+', partita del '+fmtDate(m.date);
   return 'Partita del '+fmtDate(m.date);
 }
 function scopeOpts(){
-  const m=cur(), o=setsWithData(m).map(s=>({k:'set'+s,l:'Set '+s}));
+  const m=cur(), o=[1,2,3,4,5].map(s=>({k:'set'+s,l:setName(s),n:m.ev.filter(e=>e.s===s).length}));
   o.push({k:'match',l:'Tutta la partita'});
   const others=sameOpp(m); if(others.length) o.push({k:'opp',l:`Tutte contro ${m.opp.trim()} (${others.length+1})`});
   return o;
@@ -1557,17 +1557,18 @@ const NG=[
   {k:'C',l:'Altri',f:e=>isC(e.d),t:'Primo tempo, pipe e attacco da 1'}
 ];
 const ngTot=evs=>evs.reduce((a,e)=>{ a.t++; if(e.o==='K') a.K++; else if(e.o==='E'||e.o==='B') a.E++; return a; },{t:0,K:0,E:0});
+const effCell=(K,E,t)=>{ if(!t) return '<td class="ef nil"></td>'; const v=(K-E)/t; return `<td class="ef${v>0?' p':v<0?' e':' z'}">${spct(v)}</td>`; };
 function numsCells(evs,g){
-  const x=ngTot(evs.filter(g.f));
-  if(!x.t) return '<td class="g0 nil">·</td><td class="nil"></td><td class="nil"></td>';
-  return `<td class="g0">${x.t}</td><td class="p${x.K?'':' z'}">${x.K}</td><td class="e${x.E?'':' z'}">${x.E}</td>`;
+  const x=ngTot(evs.filter(g.f)), tot=g.k==='tot';
+  if(!x.t) return '<td class="g0 nil">·</td><td class="nil"></td><td class="nil"></td>'+(tot?effCell(0,0,0):'');
+  return `<td class="g0">${x.t}</td><td class="p${x.K?'':' z'}">${x.K}</td><td class="e${x.E?'':' z'}">${x.E}</td>`+(tot?effCell(x.K,x.E,x.t):'');
 }
 function numsDetail(evs,s,cols){
   const A=aggregate(evs).players[0];
   if(!A) return `<tr class="det"><td colspan="${cols}"><p class="nd-none">Ancora nessun attacco.</p></td></tr>`;
   const z=v=>v?'':' z';
-  const rows=Object.values(A.sh).sort(byUse).map(x=>`<tr><th>${esc(shortShot(x.z,x.d))}</th><td>${x.t}</td><td class="p${z(x.K)}">${x.K}</td><td class="${z(x.D)}">${x.D}</td><td class="${z(x.B)}">${x.B}</td><td class="e${z(x.E)}">${x.E}</td></tr>`).join('');
-  return `<tr class="det"><td colspan="${cols}"><div class="nd"><table class="ndt"><thead><tr><th>Colpo</th><th>Att</th><th>Punti</th><th>${s==='N'?'Dif. loro':'Dif. nostra'}</th><th>Murate</th><th>Errori</th></tr></thead><tbody>${rows}</tbody></table></div></td></tr>`;
+  const rows=Object.values(A.sh).sort(byUse).map(x=>`<tr><th>${esc(shortShot(x.z,x.d))}</th><td>${x.t}</td><td class="p${z(x.K)}">${x.K}</td><td class="${z(x.D)}">${x.D}</td><td class="${z(x.B)}">${x.B}</td><td class="e${z(x.E)}">${x.E}</td>${effCell(x.K,x.E+x.B,x.t)}</tr>`).join('');
+  return `<tr class="det"><td colspan="${cols}"><div class="nd"><table class="ndt"><thead><tr><th>Colpo</th><th>Att</th><th>Punti</th><th>${s==='N'?'Dif. loro':'Dif. nostra'}</th><th>Murate</th><th>Errori</th><th>Eff.</th></tr></thead><tbody>${rows}</tbody></table></div></td></tr>`;
 }
 function numsTable(evs,s){
   const m=cur();
@@ -1576,25 +1577,25 @@ function numsTable(evs,s){
   const head0=`<div class="n-head"><i></i><h2>${esc(title)}</h2><small>${s==='N'?'noi':'loro'}</small></div>`;
   if(!nums.length) return `<section class="nums" data-side="${s}">${head0}<p class="n-empty">${s==='N'?'Aggiungi le tue attaccanti dallo scout, con il + tra i numeri.':'Aggiungi i numeri delle avversarie dallo scout, con il + tra i numeri.'}</p></section>`;
   const groups=NG.filter(g=>g.k!=='C'||sideEv(m.ev,s).some(g.f));
-  const cols=1+groups.length*3;
+  const cols=2+groups.length*3;
   const nameOf=n=>{ if(s!=='N'||n==='?'||!prefs.names) return ''; const p=plOf(n); return p&&p.nm?p.nm:''; };
   const body=nums.map(n=>{
     const pe=evs.filter(e=>e.n===n), k=s+n, open=numsOpen===k, nm=nameOf(n);
     const lab=(n==='?'?'Numero non visto':'Numero '+n+(nm?', '+nm:''))+': '+(pe.length?att(pe.length):'nessun attacco')+'. Tocca per il dettaglio dei colpi';
     return `<tr class="pr${pe.length?'':' idle'}${open?' open':''}" data-k="${esc(k)}"><th class="pl"><button aria-expanded="${open}" aria-label="${esc(lab)}"><b>${esc(n)}</b>${nm?`<small>${esc(nm)}</small>`:''}</button></th>${groups.map(g=>numsCells(pe,g)).join('')}</tr>`+(open?numsDetail(pe,s,cols):'');
   }).join('');
-  const head=`<tr><th class="pl" rowspan="2"><span class="sr">Giocatrice</span></th>${groups.map(g=>`<th colspan="3" class="gh"${g.t?` title="${g.t}"`:''}>${g.l}</th>`).join('')}</tr><tr>${groups.map(()=>'<th class="g0">A</th><th class="p">P</th><th class="e">E</th>').join('')}</tr>`;
+  const head=`<tr><th class="pl" rowspan="2"><span class="sr">Giocatrice</span></th>${groups.map(g=>`<th colspan="${g.k==='tot'?4:3}" class="gh"${g.t?` title="${g.t}"`:''}>${g.l}</th>`).join('')}</tr><tr>${groups.map(g=>'<th class="g0">A</th><th class="p">P</th><th class="e">E</th>'+(g.k==='tot'?'<th class="ef" title="Efficienza: punti meno errori e murate, diviso gli attacchi">Eff</th>':'')).join('')}</tr>`;
   const foot=`<tr><th class="pl"><b>Tot</b></th>${groups.map(g=>numsCells(evs,g)).join('')}</tr>`;
   return `<section class="nums" data-side="${s}">${head0}<div class="n-wrap"><table class="nt"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div></section>`;
 }
 function numsHTML(evs){
   return `<div class="ngrid">${numsTable(sideEv(evs,'N'),'N')}${numsTable(sideEv(evs,'L'),'L')}</div>`
-    +`<p class="on-tiny n-leg"><b>A</b> attacchi · <b class="p">P</b> punti · <b class="e">E</b> errori e murate. Tocca un numero per vedere ogni colpo, con difese e murate separate. Altri: primo tempo, pipe e attacco da 1.</p>`;
+    +`<p class="on-tiny n-leg"><b>A</b> attacchi · <b class="p">P</b> punti · <b class="e">E</b> errori e murate · <b>Eff</b> punti meno errori, diviso gli attacchi: sopra lo zero l’attacco rende, sotto regala punti. Sotto i 5 attacchi è poco affidabile. Tocca un numero per vedere ogni colpo, con difese e murate separate. Altri: primo tempo, pipe e attacco da 1.</p>`;
 }
 function renderTips(){
   const box=$('#v-tips'), m=cur();
   const scope=curScope(), opts=scopeOpts();
-  const chips=`<div class="chips" role="group" aria-label="Quali attacchi">${opts.map(o=>`<button class="chip" data-scope="${o.k}" aria-pressed="${scope===o.k}">${esc(o.l)}</button>`).join('')}</div>`;
+  const chips=`<div class="chips" role="group" aria-label="Quali attacchi">${opts.map(o=>`<button class="chip${o.n===0?' nodata':''}" data-scope="${o.k}" aria-pressed="${scope===o.k}"${o.n===0?` aria-label="${esc(o.l)}, nessun attacco"`:''}>${esc(o.l)}</button>`).join('')}</div>`;
   const tabs=[['nums','Numeri'],['brief','Cosa dire'],['L','Avversarie'],['N','Noi'],['X','Campo']];
   const seg=`<div class="seg five" role="group" aria-label="Cosa vedere">${tabs.map(([k,l])=>`<button data-tt="${k}" aria-pressed="${tipsUI.tab===k}">${l}</button>`).join('')}</div>`;
   const evs=fEvents(scope);

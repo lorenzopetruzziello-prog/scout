@@ -308,6 +308,9 @@ kbd{display:inline-block;min-width:20px;padding:0 5px;border-radius:6px;backgrou
 .nt td.p{color:var(--pc);font-weight:800}
 .nt td.e{color:var(--ec);font-weight:800}
 .nt td.z,.nt td.nil{color:var(--on-3);font-weight:500}
+.nums .nt .ef{min-width:40px;padding:0 4px 0 2px;font-size:13px}
+.nums .ndt td.ef{font-size:12px}
+.chip.nodata:not([aria-pressed="true"]){opacity:.55}
 .nt .pl{position:sticky;left:0;z-index:1;width:48px;min-width:48px;max-width:48px;background:var(--bg);border-top:1px solid rgba(255,255,255,.1)}
 .nt thead .pl{border-top:0}
 .nt .pl button{display:flex;flex-direction:column;justify-content:center;gap:2px;width:48px;height:40px;padding:0 4px 0 5px;text-align:left;border-radius:8px}
