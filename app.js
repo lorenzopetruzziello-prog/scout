@@ -842,12 +842,13 @@ const sessionSaved=[];
 const resetSel=()=>{ sel={n:null,z:null,d:null,o:null}; };
 const side=()=>db.side;
 let filter='match';
-let tipsUI={scope:null,tab:'brief'};
+let tipsUI={scope:null,tab:'nums'};
+let numsOpen=null;   // Numeri: giocatrice aperta nel dettaglio (lato+numero)
 const PKEY='scout-prefs';
 let prefs=(()=>{ const d={haptics:true,wipe:true,sideHint:true,names:true,big:false}; try{ return Object.assign(d,JSON.parse(localStorage.getItem(PKEY)||'{}')); }catch(e){ return d; } })();
 function savePrefs(){ try{ localStorage.setItem(PKEY,JSON.stringify(prefs)); }catch(e){} applyPrefs(); if(view==='scout') renderScout(); }
 function applyPrefs(){ $('#app').classList.toggle('big',!!prefs.big); }
-function resetTipsUI(){ tipsUI={scope:null,tab:'brief'}; filter='match'; }
+function resetTipsUI(){ tipsUI={scope:null,tab:'nums'}; numsOpen=null; filter='match'; }
 const closeBtn=()=>`<button class="iconbtn" data-close aria-label="Chiudi">${IC.x}</button>`;
 const setsWithData=(m,min)=>[...new Set(m.ev.map(e=>e.s))].sort((a,b)=>a-b).filter(s=>m.ev.filter(e=>e.s===s).length>=(min||4));
 
@@ -1003,8 +1004,8 @@ $('#sideSw').addEventListener('click',e=>{ const b=e.target.closest('button[data
 $('#sideSw').addEventListener('keydown',e=>{ if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){ e.preventDefault(); setSide(side()==='L'?'N':'L'); const b=$(`#sideSw button[data-side="${side()}"]`); if(b) b.focus(); } });
 
 /* maglie */
-function jerseyNums(){
-  const m=cur(), s=side(), nums=new Set();
+function jerseyNums(sd){
+  const m=cur(), s=sd||side(), nums=new Set();
   if(s==='L') m.roster.forEach(n=>nums.add(n));
   else livePl().filter(p=>p.r!=='L').forEach(p=>nums.add(p.n));
   m.ev.forEach(e=>{ if(e.p===s&&e.n!=='?') nums.add(e.n); });
@@ -1546,15 +1547,60 @@ function sitrep(B){
     return `<div class="sit"><p class="k"><i style="--c:${c}"></i>${esc(lab)}</p><div class="v"><b>${pct(T.K/arr.length)}</b><span>${T.K} su ${arr.length} a punto</span></div>${tr?`<p class="tr">${tr}</p>`:''}</div>`; };
   return `<div class="sitrep">${card(oppLabel(m),'var(--L1)',B.L,B.dL,B.oL,B.plab)}${card(teamLabel(),'var(--N1)',B.N,B.dN,B.oN,B.plab)}</div>`;
 }
+/* numeri: attacchi, punti ed errori per giocatrice e per colpo, a colpo d'occhio */
+// E = errori + murate (punti persi in attacco). Nel dettaglio della giocatrice sono separati.
+const NG=[
+  {k:'tot',l:'Totale',f:()=>true},
+  {k:'D',l:'Diag.',f:e=>e.d==='D'},
+  {k:'L',l:'Para.',f:e=>e.d==='L'},
+  {k:'T',l:'Pallon.',f:e=>e.d==='T'},
+  {k:'C',l:'Altri',f:e=>isC(e.d),t:'Primo tempo, pipe e attacco da 1'}
+];
+const ngTot=evs=>evs.reduce((a,e)=>{ a.t++; if(e.o==='K') a.K++; else if(e.o==='E'||e.o==='B') a.E++; return a; },{t:0,K:0,E:0});
+function numsCells(evs,g){
+  const x=ngTot(evs.filter(g.f));
+  if(!x.t) return '<td class="g0 nil">·</td><td class="nil"></td><td class="nil"></td>';
+  return `<td class="g0">${x.t}</td><td class="p${x.K?'':' z'}">${x.K}</td><td class="e${x.E?'':' z'}">${x.E}</td>`;
+}
+function numsDetail(evs,s,cols){
+  const A=aggregate(evs).players[0];
+  if(!A) return `<tr class="det"><td colspan="${cols}"><p class="nd-none">Ancora nessun attacco.</p></td></tr>`;
+  const z=v=>v?'':' z';
+  const rows=Object.values(A.sh).sort(byUse).map(x=>`<tr><th>${esc(shortShot(x.z,x.d))}</th><td>${x.t}</td><td class="p${z(x.K)}">${x.K}</td><td class="${z(x.D)}">${x.D}</td><td class="${z(x.B)}">${x.B}</td><td class="e${z(x.E)}">${x.E}</td></tr>`).join('');
+  return `<tr class="det"><td colspan="${cols}"><div class="nd"><table class="ndt"><thead><tr><th>Colpo</th><th>Att</th><th>Punti</th><th>${s==='N'?'Dif. loro':'Dif. nostra'}</th><th>Murate</th><th>Errori</th></tr></thead><tbody>${rows}</tbody></table></div></td></tr>`;
+}
+function numsTable(evs,s){
+  const m=cur();
+  const nums=jerseyNums(s); if(evs.some(e=>e.n==='?')) nums.push('?');
+  const title=s==='N'?(db.team.name.trim()||'Noi'):(m.opp.trim()||'Avversarie');
+  const head0=`<div class="n-head"><i></i><h2>${esc(title)}</h2><small>${s==='N'?'noi':'loro'}</small></div>`;
+  if(!nums.length) return `<section class="nums" data-side="${s}">${head0}<p class="n-empty">${s==='N'?'Aggiungi le tue attaccanti dallo scout, con il + tra i numeri.':'Aggiungi i numeri delle avversarie dallo scout, con il + tra i numeri.'}</p></section>`;
+  const groups=NG.filter(g=>g.k!=='C'||sideEv(m.ev,s).some(g.f));
+  const cols=1+groups.length*3;
+  const nameOf=n=>{ if(s!=='N'||n==='?'||!prefs.names) return ''; const p=plOf(n); return p&&p.nm?p.nm:''; };
+  const body=nums.map(n=>{
+    const pe=evs.filter(e=>e.n===n), k=s+n, open=numsOpen===k, nm=nameOf(n);
+    const lab=(n==='?'?'Numero non visto':'Numero '+n+(nm?', '+nm:''))+': '+(pe.length?att(pe.length):'nessun attacco')+'. Tocca per il dettaglio dei colpi';
+    return `<tr class="pr${pe.length?'':' idle'}${open?' open':''}" data-k="${esc(k)}"><th class="pl"><button aria-expanded="${open}" aria-label="${esc(lab)}"><b>${esc(n)}</b>${nm?`<small>${esc(nm)}</small>`:''}</button></th>${groups.map(g=>numsCells(pe,g)).join('')}</tr>`+(open?numsDetail(pe,s,cols):'');
+  }).join('');
+  const head=`<tr><th class="pl" rowspan="2"><span class="sr">Giocatrice</span></th>${groups.map(g=>`<th colspan="3" class="gh"${g.t?` title="${g.t}"`:''}>${g.l}</th>`).join('')}</tr><tr>${groups.map(()=>'<th class="g0">A</th><th class="p">P</th><th class="e">E</th>').join('')}</tr>`;
+  const foot=`<tr><th class="pl"><b>Tot</b></th>${groups.map(g=>numsCells(evs,g)).join('')}</tr>`;
+  return `<section class="nums" data-side="${s}">${head0}<div class="n-wrap"><table class="nt"><thead>${head}</thead><tbody>${body}</tbody><tfoot>${foot}</tfoot></table></div></section>`;
+}
+function numsHTML(evs){
+  return `<div class="ngrid">${numsTable(sideEv(evs,'N'),'N')}${numsTable(sideEv(evs,'L'),'L')}</div>`
+    +`<p class="on-tiny n-leg"><b>A</b> attacchi · <b class="p">P</b> punti · <b class="e">E</b> errori e murate. Tocca un numero per vedere ogni colpo, con difese e murate separate. Altri: primo tempo, pipe e attacco da 1.</p>`;
+}
 function renderTips(){
   const box=$('#v-tips'), m=cur();
   const scope=curScope(), opts=scopeOpts();
   const chips=`<div class="chips" role="group" aria-label="Quali attacchi">${opts.map(o=>`<button class="chip" data-scope="${o.k}" aria-pressed="${scope===o.k}">${esc(o.l)}</button>`).join('')}</div>`;
-  const tabs=[['brief','Cosa dire'],['L','Avversarie'],['N','Noi'],['X','Campo']];
-  const seg=`<div class="seg" role="group" aria-label="Cosa vedere">${tabs.map(([k,l])=>`<button data-tt="${k}" aria-pressed="${tipsUI.tab===k}">${l}</button>`).join('')}</div>`;
+  const tabs=[['nums','Numeri'],['brief','Cosa dire'],['L','Avversarie'],['N','Noi'],['X','Campo']];
+  const seg=`<div class="seg five" role="group" aria-label="Cosa vedere">${tabs.map(([k,l])=>`<button data-tt="${k}" aria-pressed="${tipsUI.tab===k}">${l}</button>`).join('')}</div>`;
   const evs=fEvents(scope);
   let body='';
   if(!m.ev.length) body=emptyState('Ancora niente da dire','Segna qualche attacco: qui trovi cosa dire alle giocatrici, già in ordine di importanza.');
+  else if(tipsUI.tab==='nums') body=numsHTML(evs);
   else if(tipsUI.tab==='brief') body=briefHTML(scope);
   else if(tipsUI.tab==='L') body=playersHTML(sideEv(evs,'L'),'L');
   else if(tipsUI.tab==='N') body=playersHTML(sideEv(evs,'N'),'N');
@@ -1615,6 +1661,7 @@ function campoHTML(evs){
 $('#v-tips').addEventListener('click',e=>{
   const c=e.target.closest('[data-scope]'); if(c){ tipsUI.scope=c.dataset.scope; filter=c.dataset.scope==='tb'?'match':c.dataset.scope; renderTips(); return; }
   const t=e.target.closest('[data-tt]'); if(t){ tipsUI.tab=t.dataset.tt; renderTips(); return; }
+  const r=e.target.closest('tr.pr[data-k]'); if(r){ numsOpen=numsOpen===r.dataset.k?null:r.dataset.k; buzz(6); renderTips(); return; }
   if(e.target.closest('[data-show]')){ openShow(buildBrief(curScope())); return; }
   if(e.target.closest('[data-send]')){ const B=buildBrief(curScope()); textSheet('Da mandare alle giocatrici',briefText(B),'Pronto per WhatsApp: i titoli in grassetto appaiono già formattati.'); return; }
   if(e.target.closest('[data-report]')){ const sc=curScope(); textSheet('Report completo',reportText(sc==='tb'?'match':sc),'Pronto per WhatsApp.'); return; }
